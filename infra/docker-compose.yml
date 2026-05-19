@@ -1,0 +1,93 @@
+version: '3.9'
+
+# ============================================================
+# Travel OS — Local Development Stack
+# Run: docker compose up -d
+# ============================================================
+
+services:
+
+  # ── PostgreSQL ─────────────────────────────────────────────
+  postgres:
+    image: postgres:16-alpine
+    container_name: travel-os-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB:       travel_os
+      POSTGRES_USER:     travel_os_user
+      POSTGRES_PASSWORD: travel_os_secret_dev
+      PGDATA:            /var/lib/postgresql/data/pgdata
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./apps/api/src/migrations:/docker-entrypoint-initdb.d:ro
+    ports:
+      - '5432:5432'
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U travel_os_user -d travel_os']
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ── Redis ──────────────────────────────────────────────────
+  redis:
+    image: redis:7-alpine
+    container_name: travel-os-redis
+    restart: unless-stopped
+    command: >
+      redis-server
+      --requirepass redis_secret_dev
+      --maxmemory 256mb
+      --maxmemory-policy allkeys-lru
+      --appendonly yes
+    volumes:
+      - redis_data:/data
+    ports:
+      - '6379:6379'
+    healthcheck:
+      test: ['CMD', 'redis-cli', '-a', 'redis_secret_dev', 'ping']
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ── Redis Commander (Dev UI) ───────────────────────────────
+  redis-ui:
+    image: rediscommander/redis-commander:latest
+    container_name: travel-os-redis-ui
+    restart: unless-stopped
+    environment:
+      REDIS_HOSTS:     local:redis:6379:0:redis_secret_dev
+    ports:
+      - '8081:8081'
+    depends_on:
+      redis:
+        condition: service_healthy
+    profiles:
+      - dev-tools
+
+  # ── pgAdmin (Dev UI) ───────────────────────────────────────
+  pgadmin:
+    image: dpage/pgadmin4:latest
+    container_name: travel-os-pgadmin
+    restart: unless-stopped
+    environment:
+      PGADMIN_DEFAULT_EMAIL:    admin@travel-os.dev
+      PGADMIN_DEFAULT_PASSWORD: pgadmin_dev
+      PGADMIN_CONFIG_SERVER_MODE: 'False'
+    volumes:
+      - pgadmin_data:/var/lib/pgadmin
+    ports:
+      - '5050:80'
+    depends_on:
+      postgres:
+        condition: service_healthy
+    profiles:
+      - dev-tools
+
+volumes:
+  postgres_data:
+  redis_data:
+  pgadmin_data:
+
+networks:
+  default:
+    name: travel-os-network
