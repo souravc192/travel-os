@@ -2,14 +2,24 @@ import { Pool, PoolClient } from 'pg';
 import { logger } from './logger';
 
 // ─── Connection Pool ─────────────────────────────────────────
+// SSL is enabled when:
+//   • NODE_ENV=production
+//   • DATABASE_URL contains sslmode=require / verify-* (managed PG)
+//   • Hostname matches a known managed provider (Neon / Supabase / Railway)
+//   • DATABASE_SSL=true is set explicitly
+const dbUrl = process.env.DATABASE_URL ?? '';
+const needsSsl =
+  process.env.NODE_ENV === 'production' ||
+  process.env.DATABASE_SSL === 'true' ||
+  /sslmode=(require|verify-ca|verify-full)/i.test(dbUrl) ||
+  /(neon\.tech|supabase\.co|railway\.app|render\.com|aws|azure)/i.test(dbUrl);
+
 export const db = new Pool({
-  connectionString: process.env.DATABASE_URL,
+  connectionString: dbUrl,
   max: 20,                    // Max pool connections
   idleTimeoutMillis: 30_000,  // Remove idle connections after 30s
-  connectionTimeoutMillis: 5_000,
-  ssl: process.env.NODE_ENV === 'production'
-    ? { rejectUnauthorized: false }
-    : false,
+  connectionTimeoutMillis: 10_000,
+  ssl: needsSsl ? { rejectUnauthorized: false } : false,
 });
 
 db.on('error', (err) => {

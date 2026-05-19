@@ -23,7 +23,7 @@ function getNavItems(role: UserRole) {
     { path: '/vendors',   label: 'Vendors',      icon: Building2,       roles: [UserRole.TRAVEL_DESK, UserRole.SUPER_ADMIN] },
     { path: '/invoices',  label: 'Invoices',     icon: Receipt,         roles: [UserRole.FINANCE_ADMIN, UserRole.SUPER_ADMIN] },
     { path: '/expenses',  label: 'Expenses',     icon: Wallet,          roles: [UserRole.FINANCE_ADMIN, UserRole.SUPER_ADMIN] },
-    { path: '/budget',    label: 'Budget',       icon: BarChart3,       roles: [UserRole.FINANCE_ADMIN, UserRole.SUPER_ADMIN] },
+    { path: '/budget',    label: 'Budget',       icon: BarChart3,       roles: [UserRole.EMPLOYEE, UserRole.L1_APPROVER, UserRole.L2_APPROVER, UserRole.TRAVEL_DESK, UserRole.FINANCE_ADMIN, UserRole.SUPER_ADMIN] },
     { path: '/analytics', label: 'Analytics',    icon: BarChart3,       roles: [UserRole.TRAVEL_DESK, UserRole.FINANCE_ADMIN, UserRole.SUPER_ADMIN] },
     { path: '/users',     label: 'Users',        icon: Users,           roles: [UserRole.SUPER_ADMIN] },
     { path: '/settings',  label: 'Settings',     icon: Settings,        roles: [UserRole.SUPER_ADMIN] },

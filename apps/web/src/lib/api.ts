@@ -140,12 +140,31 @@ export const approvalApi = {
 };
 
 export const budgetApi = {
-  summary:          (costCentreId?: string) => api.get('/budget/summary', { params: { costCentreId } }),
-  orgOverview:      () => api.get('/budget/org-overview'),
-  history:          (budgetId: string) => api.get(`/budget/${budgetId}/history`),
-  requestSupplementary: (data: unknown) => api.post('/budget/supplementary', data),
-  approveSupplementary: (id: string, data: unknown) =>
+  summary:          (params?: { costCentreId?: string; fiscalYear?: string }) =>
+    api.get('/budget/summary', { params }),
+  orgOverview:      (params?: { fiscalYear?: string }) =>
+    api.get('/budget/org-overview', { params }),
+  getById:          (id: string) => api.get(`/budget/${id}`),
+  history:          (budgetId: string, params?: { limit?: number }) =>
+    api.get(`/budget/${budgetId}/history`, { params }),
+  createAllocation: (data: { costCentreId: string; fiscalYear: string; allocated: number }) =>
+    api.post('/budget', data),
+  adjust:           (id: string, data: { delta: number; note: string }) =>
+    api.post(`/budget/${id}/adjust`, data),
+  consume:          (id: string, data: { amount: number; tripId?: string; note?: string }) =>
+    api.post(`/budget/${id}/consume`, data),
+  listSupplementary:     (params?: { status?: string }) =>
+    api.get('/budget/supplementary', { params }),
+  requestSupplementary:  (data: { amount: number; reason: string; costCentreId?: string; fiscalYear?: string }) =>
+    api.post('/budget/supplementary', data),
+  approveSupplementary:  (id: string, data: { action: 'APPROVE' | 'REJECT'; note?: string }) =>
     api.post(`/budget/supplementary/${id}/approve`, data),
+  listAlerts:           (params?: { budgetId?: string }) =>
+    api.get('/budget/alerts', { params }),
+  listAlertThresholds:  () => api.get('/budget/alert-thresholds'),
+  upsertAlertThreshold: (data: { thresholdPct: number; channel?: string; label?: string; isActive?: boolean }) =>
+    api.post('/budget/alert-thresholds', data),
+  deleteAlertThreshold: (id: string) => api.delete(`/budget/alert-thresholds/${id}`),
 };
 
 export const notificationApi = {
