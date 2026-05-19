@@ -10,6 +10,7 @@ import PageLoader from '../components/ui/PageLoader';
 const LoginPage        = lazy(() => import('../pages/auth/LoginPage'));
 const OnboardingPage   = lazy(() => import('../pages/onboarding/OnboardingPage'));
 const DashboardPage    = lazy(() => import('../pages/dashboard/DashboardPage'));
+const BudgetDashboard  = lazy(() => import('../pages/budget/BudgetDashboardPage'));
 const NotFoundPage     = lazy(() => import('../pages/NotFoundPage'));
 
 // ─── Auth Initializer (runs on every app load) ────────────────
@@ -112,6 +113,7 @@ const router = createBrowserRouter([
             element: <AppLayout />,
             children: [
               { path: 'dashboard', element: <DashboardPage /> },
+              { path: 'budget',    element: <BudgetDashboard /> },
 
               // Employee routes
               {
@@ -160,7 +162,6 @@ const router = createBrowserRouter([
                   { path: 'users',     element: <PageLoader /> },
                   { path: 'settings',  element: <PageLoader /> },
                   { path: 'analytics', element: <PageLoader /> },
-                  { path: 'budget',    element: <PageLoader /> },
                 ],
               },
             ],
