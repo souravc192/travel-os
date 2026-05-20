@@ -6,7 +6,11 @@ import { v4 as uuidv4 } from 'uuid';
  * If the client already sent one, it is preserved.
  */
 export function requestContext(req: Request, res: Response, next: NextFunction): void {
-  const requestId = (req.headers['x-request-id'] as string) || uuidv4();
+  const raw = req.headers['x-request-id'];
+  const fromHeader =
+    typeof raw === 'string' ? raw.trim() : Array.isArray(raw) ? raw[0]?.trim() : '';
+  const requestId = fromHeader || uuidv4();
+  req.requestId = requestId;
   req.headers['x-request-id'] = requestId;
   res.setHeader('X-Request-ID', requestId);
   next();

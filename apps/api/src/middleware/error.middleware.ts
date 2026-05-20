@@ -1,5 +1,4 @@
 import { Request, Response, NextFunction } from 'express';
-import { v4 as uuidv4 } from 'uuid';
 import { logger } from '../config/logger';
 
 // ─── Error Handler ────────────────────────────────────────────
@@ -12,7 +11,7 @@ export function errorHandler(
   const status = err.status || 500;
   const isDev = process.env.NODE_ENV !== 'production';
 
-  logger.error(`[${req.requestId}] ${err.message}`, {
+  logger.error(`[${req.requestId ?? 'unknown'}] ${err.message}`, {
     method: req.method,
     path: req.path,
     status,
@@ -45,11 +44,4 @@ export function errorHandler(
       ...(isDev && { stack: err.stack }),
     },
   });
-}
-
-// ─── Request Context Middleware ───────────────────────────────
-export function requestContext(req: Request, res: Response, next: NextFunction): void {
-  req.requestId = uuidv4();
-  res.setHeader('X-Request-ID', req.requestId);
-  next();
 }
