@@ -48,8 +48,10 @@ export async function signRefreshToken(userId: string): Promise<{ token: string;
   });
 
   // Store in Redis — key allows multi-device logout
-  const hash = crypto.createHash('sha256').update(token).digest('hex');
-  await redis.setex(RedisKey.refreshToken(userId, jti), TTL.REFRESH_TOKEN, hash);
+  if (redis) {
+    const hash = crypto.createHash('sha256').update(token).digest('hex');
+    await redis.setex(RedisKey.refreshToken(userId, jti), TTL.REFRESH_TOKEN, hash);
+  }
 
   return { token, jti };
 }
@@ -58,10 +60,12 @@ export async function signRefreshToken(userId: string): Promise<{ token: string;
 export async function verifyAccessToken(token: string): Promise<AccessTokenPayload> {
   const payload = jwt.verify(token, ACCESS_SECRET) as AccessTokenPayload;
 
-  // Check if token has been blacklisted (after logout)
-  const isBlacklisted = await redis.exists(RedisKey.blacklistedToken(payload.jti));
-  if (isBlacklisted) {
-    throw new Error('Token has been revoked');
+  // Check if token has been blacklisted (after logout) — skip if no Redis
+  if (redis) {
+    const isBlacklisted = await redis.exists(RedisKey.blacklistedToken(payload.jti));
+    if (isBlacklisted) {
+      throw new Error('Token has been revoked');
+    }
   }
 
   return payload;
@@ -71,17 +75,19 @@ export async function verifyAccessToken(token: string): Promise<AccessTokenPaylo
 export async function verifyRefreshToken(token: string): Promise<RefreshTokenPayload> {
   const payload = jwt.verify(token, REFRESH_SECRET) as RefreshTokenPayload;
 
-  // Validate against Redis store
-  const storedHash = await redis.get(RedisKey.refreshToken(payload.sub, payload.jti));
-  if (!storedHash) {
-    throw new Error('Refresh token not found or expired');
-  }
+  // Validate against Redis store — skip validation if no Redis (dev mode)
+  if (redis) {
+    const storedHash = await redis.get(RedisKey.refreshToken(payload.sub, payload.jti));
+    if (!storedHash) {
+      throw new Error('Refresh token not found or expired');
+    }
 
-  const tokenHash = crypto.createHash('sha256').update(token).digest('hex');
-  if (storedHash !== tokenHash) {
-    // Possible token theft — invalidate all sessions for this user
-    await revokeAllUserTokens(payload.sub);
-    throw new Error('Refresh token mismatch — all sessions revoked for security');
+    const tokenHash = crypto.createHash('sha256').update(token).digest('hex');
+    if (storedHash !== tokenHash) {
+      // Possible token theft — invalidate all sessions for this user
+      await revokeAllUserTokens(payload.sub);
+      throw new Error('Refresh token mismatch — all sessions revoked for security');
+    }
   }
 
   return payload;
@@ -89,17 +95,20 @@ export async function verifyRefreshToken(token: string): Promise<RefreshTokenPay
 
 // ─── Blacklist Access Token ────────────────────────────────────
 export async function blacklistAccessToken(jti: string): Promise<void> {
+  if (!redis) return;
   // Keep in Redis until natural expiry (20 min)
   await redis.setex(RedisKey.blacklistedToken(jti), TTL.ACCESS_TOKEN_BLACKLIST, '1');
 }
 
 // ─── Revoke Refresh Token ─────────────────────────────────────
 export async function revokeRefreshToken(userId: string, jti: string): Promise<void> {
+  if (!redis) return;
   await redis.del(RedisKey.refreshToken(userId, jti));
 }
 
 // ─── Revoke ALL tokens for a user (security incident / forced logout) ──
 export async function revokeAllUserTokens(userId: string): Promise<void> {
+  if (!redis) return;
   const keys = await redis.keys(`rt:${userId}:*`);
   if (keys.length > 0) {
     await redis.del(...keys);

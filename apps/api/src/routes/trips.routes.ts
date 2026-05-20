@@ -1,4 +1,4 @@
-import { Router } from 'express';
+import { Router, Request, Response, NextFunction } from 'express';
 import { body } from 'express-validator';
 import { authenticate } from '../middleware/auth.middleware';
 import { validateRequest } from '../middleware/validate.middleware';
@@ -128,7 +128,7 @@ router.post('/',
     body('budgetCap').isFloat({ min: 0 }).withMessage('Budget cap must be a positive number.'),
   ],
   validateRequest,
-  async (req, res, next) => {
+  async (req: Request, res: Response, next: NextFunction) => {
     try {
       const userId = req.user!.sub;
       const {

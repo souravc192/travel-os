@@ -1,24 +1,38 @@
 import Redis from 'ioredis';
 import { logger } from './logger';
 
-export const redis = new Redis(process.env.REDIS_URL || 'redis://localhost:6379', {
-  maxRetriesPerRequest: 3,
-  retryStrategy: (times) => {
-    if (times > 5) {
-      logger.error('Redis: Max retries exceeded, giving up');
-      return null;
-    }
-    return Math.min(times * 200, 2000);
-  },
-  lazyConnect: true,
-  enableOfflineQueue: false,
-});
+// ─── Redis is OPTIONAL in dev ─────────────────────────────────
+// Set REDIS_ENABLED=false in .env to skip Redis entirely
+const redisEnabled = process.env.REDIS_ENABLED !== 'false';
 
-redis.on('error', (err) => logger.error('Redis error:', err));
-redis.on('connect', () => logger.info('Redis connected'));
-redis.on('reconnecting', () => logger.warn('Redis reconnecting...'));
+let redis: Redis | null = null;
+
+if (redisEnabled) {
+  redis = new Redis(process.env.REDIS_URL || 'redis://localhost:6379', {
+    maxRetriesPerRequest: 3,
+    retryStrategy: (times) => {
+      if (times > 5) {
+        logger.error('Redis: Max retries exceeded, giving up');
+        return null;
+      }
+      return Math.min(times * 200, 2000);
+    },
+    lazyConnect: true,
+    enableOfflineQueue: false,
+  });
+
+  redis.on('error', (err) => logger.error('Redis error:', err));
+  redis.on('connect', () => logger.info('Redis connected'));
+  redis.on('reconnecting', () => logger.warn('Redis reconnecting...'));
+}
+
+export { redis };
 
 export async function testRedisConnection(): Promise<void> {
+  if (!redisEnabled || !redis) {
+    logger.warn('⚠️  Redis is DISABLED (REDIS_ENABLED=false). Cache/session features will be skipped.');
+    return;
+  }
   await redis.connect();
   await redis.ping();
   logger.info('Redis ping: PONG ✓');
@@ -48,24 +62,45 @@ export const RedisKey = {
   tripCodeSeq:        (dept: string, year: string) => `tripseq:${dept}:${year}`,
 } as const;
 
-// ─── Helpers ──────────────────────────────────────────────────
+// ─── Helpers (no-op when Redis disabled) ──────────────────────
 export async function cacheGet<T>(key: string): Promise<T | null> {
-  const val = await redis.get(key);
-  return val ? (JSON.parse(val) as T) : null;
+  if (!redis) return null;
+  try {
+    const val = await redis.get(key);
+    return val ? (JSON.parse(val) as T) : null;
+  } catch {
+    logger.warn(`Redis cacheGet failed for key: ${key}`);
+    return null;
+  }
 }
 
 export async function cacheSet(key: string, value: unknown, ttlSeconds: number): Promise<void> {
-  await redis.setex(key, ttlSeconds, JSON.stringify(value));
+  if (!redis) return;
+  try {
+    await redis.setex(key, ttlSeconds, JSON.stringify(value));
+  } catch {
+    logger.warn(`Redis cacheSet failed for key: ${key}`);
+  }
 }
 
 export async function cacheDel(key: string): Promise<void> {
-  await redis.del(key);
+  if (!redis) return;
+  try {
+    await redis.del(key);
+  } catch {
+    logger.warn(`Redis cacheDel failed for key: ${key}`);
+  }
 }
 
 export async function cacheInvalidatePattern(pattern: string): Promise<void> {
-  const keys = await redis.keys(pattern);
-  if (keys.length > 0) {
-    await redis.del(...keys);
+  if (!redis) return;
+  try {
+    const keys = await redis.keys(pattern);
+    if (keys.length > 0) {
+      await redis.del(...keys);
+    }
+  } catch {
+    logger.warn(`Redis cacheInvalidatePattern failed for: ${pattern}`);
   }
 }
 
