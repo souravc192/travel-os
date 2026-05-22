@@ -14,7 +14,11 @@ const upload = multer({
     const ok = /\.(xlsx|xlsm)$/i.test(file.originalname) ||
                file.mimetype.includes('spreadsheet') ||
                file.mimetype === 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
-    cb(ok ? null : new Error('Only .xlsx files are accepted.'), ok);
+    if (ok) {
+      cb(null, true);
+    } else {
+      cb(new Error('Only .xlsx files are accepted.') as any, false);
+    }
   },
 });
 

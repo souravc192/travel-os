@@ -30,10 +30,15 @@ if (!ACCESS_SECRET || !REFRESH_SECRET) {
   throw new Error('JWT secrets are not configured. Set JWT_ACCESS_SECRET and JWT_REFRESH_SECRET.');
 }
 
-// ─── Sign Access Token (15 min) ───────────────────────────────
+// ─── Sign Access Token ────────────────────────────────────────
+// When Redis is available, tokens are short-lived (15 min) and refreshed
+// via httpOnly cookie. Without Redis, use longer expiry (7 days) since
+// refresh token rotation can't be validated.
+const ACCESS_TOKEN_EXPIRY = redis ? '15m' : '7d';
+
 export function signAccessToken(payload: Omit<AccessTokenPayload, 'jti' | 'iat' | 'exp'>): string {
   return jwt.sign({ ...payload, jti: uuidv4() }, ACCESS_SECRET, {
-    expiresIn: '15m',
+    expiresIn: ACCESS_TOKEN_EXPIRY,
     algorithm: 'HS256',
   });
 }

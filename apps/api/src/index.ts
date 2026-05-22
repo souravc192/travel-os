@@ -67,9 +67,11 @@ app.use(morgan('combined', {
 }));
 
 // ─── Rate Limiting ────────────────────────────────────────────
+const isDev = process.env.NODE_ENV !== 'production';
+
 const globalLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 min
-  max: 500,
+  max: isDev ? 5000 : 500,
   standardHeaders: true,
   legacyHeaders: false,
   message: { success: false, error: { code: 'RATE_LIMIT', message: 'Too many requests. Please slow down.' } },
@@ -77,7 +79,7 @@ const globalLimiter = rateLimit({
 
 const authLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
-  max: 10, // Strict for auth endpoints
+  max: isDev ? 100 : 15,  // Relaxed for dev (login + refresh both hit this)
   standardHeaders: true,
   legacyHeaders: false,
   message: { success: false, error: { code: 'AUTH_RATE_LIMIT', message: 'Too many authentication attempts. Try again in 15 minutes.' } },

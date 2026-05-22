@@ -50,10 +50,10 @@ function getCell(row: ExcelJS.Row, col: number | undefined): string | null {
   if (!col) return null;
   const v = row.getCell(col).value;
   if (v === null || v === undefined) return null;
-  if (typeof v === 'object' && 'text' in (v as Record<string, unknown>)) {
+  if (typeof v === 'object' && 'text' in (v as unknown as Record<string, unknown>)) {
     return String((v as { text: string }).text).trim() || null;
   }
-  if (typeof v === 'object' && 'result' in (v as Record<string, unknown>)) {
+  if (typeof v === 'object' && 'result' in (v as unknown as Record<string, unknown>)) {
     return String((v as { result: unknown }).result ?? '').trim() || null;
   }
   return String(v).trim() || null;
@@ -68,7 +68,7 @@ export async function importMembers(req: Request, res: Response, next: NextFunct
     }
 
     const workbook = new ExcelJS.Workbook();
-    await workbook.xlsx.load(req.file.buffer);
+    await workbook.xlsx.load(req.file.buffer as any);
     const sheet = workbook.worksheets[0];
     if (!sheet) {
       res.status(400).json({ success: false, error: { code: 'NO_SHEET', message: 'Workbook has no sheets.' } });
@@ -146,67 +146,128 @@ export async function importMembers(req: Request, res: Response, next: NextFunct
     // Upsert departments + map name → uuid
     const deptIdByName = new Map<string, string>();
     await withTransaction(async (client) => {
+      // Deduplicate distinctDepts by normalized code to avoid "ON CONFLICT DO UPDATE cannot affect row a second time"
+      const uniqueDeptsByCode = new Map<string, string>();
       for (const name of distinctDepts) {
         const code = name.toUpperCase().replace(/[^A-Z0-9]+/g, '-').slice(0, 20) || 'DEPT';
-        const inserted = await client.query(
-          `INSERT INTO departments (name, code)
-           VALUES ($1, $2)
-           ON CONFLICT (code) DO UPDATE SET name = EXCLUDED.name
-           RETURNING id`,
-          [name, code]
-        );
-        deptIdByName.set(name, inserted.rows[0].id);
+        if (!uniqueDeptsByCode.has(code)) {
+          uniqueDeptsByCode.set(code, name);
+        }
+      }
+
+      const deptArray = Array.from(uniqueDeptsByCode.entries());
+      const deptBatchSize = 100;
+      for (let i = 0; i < deptArray.length; i += deptBatchSize) {
+        const batch = deptArray.slice(i, i + deptBatchSize);
+        const values: any[] = [];
+        const placeholders: string[] = [];
+        let paramIdx = 1;
+        for (const [code, name] of batch) {
+          placeholders.push(`($${paramIdx++}, $${paramIdx++})`);
+          values.push(name, code);
+        }
+        const queryText = `
+          INSERT INTO departments (name, code)
+          VALUES ${placeholders.join(', ')}
+          ON CONFLICT (code) DO UPDATE SET name = EXCLUDED.name
+          RETURNING id, code
+        `;
+        const resDepts = await client.query(queryText, values);
+        for (const row of resDepts.rows) {
+          for (const name of distinctDepts) {
+            const nameCode = name.toUpperCase().replace(/[^A-Z0-9]+/g, '-').slice(0, 20) || 'DEPT';
+            if (nameCode === row.code) {
+              deptIdByName.set(name, row.id);
+            }
+          }
+        }
       }
     });
 
+    // Deduplicate rowsToImport by employee_code, keeping the last occurrence (matching sequential overwrite behavior)
+    const uniqueEmployeesMap = new Map<string, typeof rowsToImport[0]>();
+    for (const r of rowsToImport) {
+      uniqueEmployeesMap.set(r.code as string, r);
+    }
+    const deduplicatedRowsToImport = Array.from(uniqueEmployeesMap.values());
+
     let inserted = 0, updated = 0;
+    const batchSize = 100;
     await withTransaction(async (client) => {
-      for (const r of rowsToImport) {
-        const deptId = r.department ? deptIdByName.get(r.department as string) ?? null : null;
-        const res2 = await client.query(
-          `INSERT INTO employees (
-              employee_code, email, first_name, last_name, name, designation, department_id,
-              l1_email, l2_email, l3_email, no_of_approvers, group_label,
-              phone, gender, hod_email, cxo_email, is_active, onboarding_complete
-            ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16, true, false)
-            ON CONFLICT (employee_code) DO UPDATE SET
-              email           = EXCLUDED.email,
-              first_name      = EXCLUDED.first_name,
-              last_name       = EXCLUDED.last_name,
-              name            = EXCLUDED.name,
-              designation     = EXCLUDED.designation,
-              department_id   = COALESCE(EXCLUDED.department_id, employees.department_id),
-              l1_email        = EXCLUDED.l1_email,
-              l2_email        = EXCLUDED.l2_email,
-              l3_email        = EXCLUDED.l3_email,
-              no_of_approvers = EXCLUDED.no_of_approvers,
-              group_label     = EXCLUDED.group_label,
-              phone           = COALESCE(EXCLUDED.phone, employees.phone),
-              gender          = EXCLUDED.gender,
-              hod_email       = EXCLUDED.hod_email,
-              cxo_email       = EXCLUDED.cxo_email,
-              is_active       = true
-            RETURNING (xmax = 0) AS was_inserted`,
-          [
+      for (let i = 0; i < deduplicatedRowsToImport.length; i += batchSize) {
+        const batch = deduplicatedRowsToImport.slice(i, i + batchSize);
+        const values: any[] = [];
+        const placeholders: string[] = [];
+        let paramIdx = 1;
+        
+        for (const r of batch) {
+          const deptId = r.department ? deptIdByName.get(r.department as string) ?? null : null;
+          const p: string[] = [];
+          for (let k = 0; k < 16; k++) {
+            p.push(`$${paramIdx++}`);
+          }
+          placeholders.push(`(${p.join(',')}, true, false)`);
+          
+          values.push(
             r.code, r.email, r.firstName, r.lastName, r.fullName, r.designation, deptId,
             r.l1, r.l2, r.l3, r.noOfApprovers, r.group,
-            r.mobile, r.gender, r.hod, r.cxo,
-          ]
-        );
-        if (res2.rows[0]?.was_inserted) inserted++; else updated++;
+            r.mobile, r.gender, r.hod, r.cxo
+          );
+        }
+        
+        const queryText = `
+          INSERT INTO employees (
+            employee_code, email, first_name, last_name, name, designation, department_id,
+            l1_email, l2_email, l3_email, no_of_approvers, group_label,
+            phone, gender, hod_email, cxo_email, is_active, onboarding_complete
+          ) VALUES ${placeholders.join(', ')}
+          ON CONFLICT (employee_code) DO UPDATE SET
+            email           = EXCLUDED.email,
+            first_name      = EXCLUDED.first_name,
+            last_name       = EXCLUDED.last_name,
+            name            = EXCLUDED.name,
+            designation     = EXCLUDED.designation,
+            department_id   = COALESCE(EXCLUDED.department_id, employees.department_id),
+            l1_email        = EXCLUDED.l1_email,
+            l2_email        = EXCLUDED.l2_email,
+            l3_email        = EXCLUDED.l3_email,
+            no_of_approvers = EXCLUDED.no_of_approvers,
+            group_label     = EXCLUDED.group_label,
+            phone           = COALESCE(EXCLUDED.phone, employees.phone),
+            gender          = EXCLUDED.gender,
+            hod_email       = EXCLUDED.hod_email,
+            cxo_email       = EXCLUDED.cxo_email,
+            is_active       = true
+          RETURNING (xmax = 0) AS was_inserted
+        `;
+        
+        const res2 = await client.query(queryText, values);
+        for (const row of res2.rows) {
+          if (row.was_inserted) inserted++; else updated++;
+        }
       }
     });
 
     // Seed default annual budget (₹24L) for each department that doesn't have one yet
     const fy = currentFiscalYear();
     await withTransaction(async (client) => {
-      for (const deptId of deptIdByName.values()) {
-        await client.query(
-          `INSERT INTO department_budgets (department_id, fiscal_year, allocated_annual)
-             VALUES ($1, $2, 2400000)
-           ON CONFLICT (department_id, fiscal_year) DO NOTHING`,
-          [deptId, fy]
-        );
+      const uniqueDeptIds = Array.from(new Set(deptIdByName.values()));
+      const budgetBatchSize = 100;
+      for (let i = 0; i < uniqueDeptIds.length; i += budgetBatchSize) {
+        const batch = uniqueDeptIds.slice(i, i + budgetBatchSize);
+        const values: any[] = [];
+        const placeholders: string[] = [];
+        let paramIdx = 1;
+        for (const deptId of batch) {
+          placeholders.push(`($${paramIdx++}, $${paramIdx++}, 2400000)`);
+          values.push(deptId, fy);
+        }
+        const queryText = `
+          INSERT INTO department_budgets (department_id, fiscal_year, allocated_annual)
+          VALUES ${placeholders.join(', ')}
+          ON CONFLICT (department_id, fiscal_year) DO NOTHING
+        `;
+        await client.query(queryText, values);
       }
     });
 

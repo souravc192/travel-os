@@ -132,6 +132,7 @@ export const memberApi = {
     fd.append('file', file);
     return api.post('/members/import', fd, {
       headers: { 'Content-Type': 'multipart/form-data' },
+      timeout: 300000, // 5 minutes timeout for bulk imports
     });
   },
   lookup:      (employeeCode: string) =>
