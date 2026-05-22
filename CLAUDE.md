@@ -1,4 +1,67 @@
-# Travel OS — Phase 2: Budget Control Engine (current)
+# Travel OS — Phase 3: Travel Request + 5-Role + Members Master (current)
+
+## Phase 3 — what shipped
+- **5-role RBAC** (replaces the old 6): `OWNER`, `ADMIN`, `TRAVEL_TEAM`, `HOD`, `USER`.
+  Mapping applied in `003_phase3_overhaul.sql`. Owner = `sourav.1@pw.live` (seeded).
+- **Members Master** (`employees` table, expanded with `email`, `designation`, `l1_email`,
+  `l2_email`, `l3_email`, `no_of_approvers`, `group_label`, `hod_email`, `cxo_email`).
+  Excel-driven; `user_id` is now nullable so members can exist without a login.
+- **Travel Request engine**:
+  - `travel_requests` — every form submission, with snapshotted autofill fields and
+    JSON detail panels (`student_details` / `guest_details` / `new_member_details`
+    / `event_details` / `traveler_details`).
+  - `travel_request_approvals` — one row per chain step, level 1-3, status FSM.
+  - Chain length = `no_of_approvers` (0 → auto-approved, no chain).
+  - Code: `TR-YYYY-NNNNN` via `next_travel_request_code()` SQL function.
+- **Department Budgets** (replaces cost-centre `budget_master`):
+  - `department_budgets` — `allocated_annual` (default ₹2 400 000 = ₹24L/yr).
+  - `budget_addition_requests` — HOD raises, Admin/Owner decides (single-step).
+  - `department_budget_history` — audit log keyed by travel_request_id.
+- **Backend endpoints added**:
+  - `POST /api/v1/members/import` — Owner/Admin only, accepts .xlsx, upserts by Employee Id.
+  - `GET  /api/v1/employees/lookup?employeeCode=PW0086` — autofill source.
+  - `POST /api/v1/travel-requests` + list/get/approve/reject/cancel.
+  - `GET  /api/v1/travel-requests/pending-approvals` — HOD inbox by email match.
+  - `POST /api/v1/budget/addition-requests` (HOD) → `/decide` (Admin/Owner).
+- **Frontend pages added**:
+  - `/travel/new` — full branching form (5 Request-For paths, conditional sections).
+  - `/travel/requests` & `/travel/requests/:id` — list + detail w/ chain timeline.
+  - `/approvals` & `/approvals/:id` — pending inbox for HOD/Travel Team/Admin/Owner.
+  - `/admin/members` — drag/drop .xlsx upload UI.
+  - `/budget` — rewritten to be department-based.
+- **Sidebar** rebuilt with the 5-role model (`apps/web/src/components/layout/AppLayout.tsx`).
+
+## DB migrations — full order
+```
+psql $DATABASE_URL -f src/migrations/001_initial_schema.sql   # Phase 1 base
+psql $DATABASE_URL -f src/migrations/001b_seed.sql            # legacy seed (still required)
+psql $DATABASE_URL -f src/migrations/002_budget_alerts.sql    # Phase 2 (dropped by 003 but harmless)
+psql $DATABASE_URL -f src/migrations/003_phase3_overhaul.sql  # Phase 3 schema
+psql $DATABASE_URL -f src/migrations/003b_seed.sql            # Phase 3 seed (Owner + dept budgets)
+```
+Or one-shot: `npm run migrate:all`.
+
+## Extra dependencies added
+- API: `multer` + `exceljs` + their @types.
+
+## Test credentials (post-Phase-3 migration)
+- `sourav.1@pw.live`         / Travel@123  (Owner)
+- `superadmin@company.com`   / Travel@123  → migrated to Owner
+- `finance@company.com`      / Travel@123  → migrated to Admin
+- `travel.desk@company.com`  / Travel@123  → migrated to Travel Team
+- `hod.eng@company.com`      / Travel@123  → migrated to HOD
+- `manager.eng@company.com`  / Travel@123  → migrated to HOD
+- `emp.eng@company.com`      / Travel@123  → migrated to User
+
+## What Phase 4+ needs from Phase 3
+- `travel_requests` — booking/invoice modules will hang off this table.
+- On `APPROVED`, the booking flow should call `POST /budget/:id/consume` with
+  `{ amount, travelRequestId }` to debit the department budget.
+- `traveler_no_of_approvers` snapshotted at submit — chain length is locked once submitted.
+
+---
+
+# Travel OS — Phase 2: Budget Control Engine (superseded)
 
 ## Phase 2 deliverables (this worktree)
 - `apps/api/src/controllers/budget.controller.ts` — full controller

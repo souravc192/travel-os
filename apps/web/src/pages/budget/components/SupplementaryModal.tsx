@@ -1,43 +1,36 @@
 import { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { X, AlertCircle, CheckCircle2 } from 'lucide-react';
-import { useRequestSupplementary } from '../../../hooks/useBudget';
+import { useRequestAddition } from '../../../hooks/useBudget';
 
-interface SupplementaryModalProps {
+interface Props {
   open: boolean;
   onClose: () => void;
-  costCentreId?: string;
-  costCentreLabel?: string;
+  departmentBudgetId?: string;
+  departmentLabel?: string;
   fiscalYear?: string;
 }
 
 export default function SupplementaryModal({
-  open, onClose, costCentreId, costCentreLabel, fiscalYear,
-}: SupplementaryModalProps) {
+  open, onClose, departmentBudgetId, departmentLabel, fiscalYear,
+}: Props) {
   const [amount, setAmount] = useState('');
   const [reason, setReason] = useState('');
   const [error,  setError]  = useState<string | null>(null);
   const [ok,     setOk]     = useState(false);
+  const mutation = useRequestAddition();
 
-  const mutation = useRequestSupplementary();
-
-  function reset() {
-    setAmount(''); setReason(''); setError(null); setOk(false);
-  }
+  function reset() { setAmount(''); setReason(''); setError(null); setOk(false); }
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setError(null);
+    if (!departmentBudgetId) { setError('No budget context.'); return; }
     const num = parseFloat(amount);
     if (!num || num <= 0) { setError('Amount must be a positive number.'); return; }
     if (reason.trim().length < 20) { setError('Reason must be at least 20 characters.'); return; }
     try {
-      await mutation.mutateAsync({
-        amount: num,
-        reason: reason.trim(),
-        costCentreId,
-        fiscalYear,
-      });
+      await mutation.mutateAsync({ departmentBudgetId, amount: num, reason: reason.trim() });
       setOk(true);
       setTimeout(() => { reset(); onClose(); }, 1400);
     } catch (err: unknown) {
@@ -49,36 +42,28 @@ export default function SupplementaryModal({
   return (
     <AnimatePresence>
       {open && (
-        <motion.div
-          className="fixed inset-0 z-50 flex items-center justify-center p-4"
-          initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-        >
-          <motion.div
-            className="absolute inset-0"
+        <motion.div className="fixed inset-0 z-50 flex items-center justify-center p-4"
+          initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
+          <motion.div className="absolute inset-0"
             style={{ background: 'rgba(0,0,0,0.55)', backdropFilter: 'blur(4px)' }}
-            onClick={() => { reset(); onClose(); }}
-          />
-          <motion.div
-            className="glass relative w-full max-w-md p-6 rounded-2xl"
+            onClick={() => { reset(); onClose(); }} />
+          <motion.div className="glass relative w-full max-w-md p-6 rounded-2xl"
             initial={{ y: 20, scale: 0.96, opacity: 0 }}
-            animate={{ y: 0,  scale: 1,    opacity: 1 }}
-            exit={{    y: 20, scale: 0.96, opacity: 0 }}
-            transition={{ duration: 0.25, ease: [0.16, 1, 0.3, 1] }}
-          >
-            <button
-              onClick={() => { reset(); onClose(); }}
+            animate={{ y: 0, scale: 1, opacity: 1 }}
+            exit={{ y: 20, scale: 0.96, opacity: 0 }}
+            transition={{ duration: 0.25, ease: [0.16, 1, 0.3, 1] }}>
+            <button onClick={() => { reset(); onClose(); }}
               className="absolute top-3 right-3 p-1.5 rounded-lg hover:bg-[rgb(var(--surface-elevated))]"
-              aria-label="Close"
-            >
+              aria-label="Close">
               <X className="w-4 h-4" style={{ color: 'rgb(var(--content-muted))' }} />
             </button>
 
             <h2 className="font-display text-xl font-bold mb-1"
               style={{ color: 'rgb(var(--content-primary))' }}>
-              Request Supplementary Budget
+              Request Budget Addition
             </h2>
             <p className="text-xs mb-5" style={{ color: 'rgb(var(--content-muted))' }}>
-              {costCentreLabel ? `For ${costCentreLabel}` : 'For your cost centre'}
+              {departmentLabel ? `For ${departmentLabel}` : 'For your department'}
               {fiscalYear && ` · FY ${fiscalYear}`}
             </p>
 
@@ -89,7 +74,7 @@ export default function SupplementaryModal({
                   Request submitted
                 </p>
                 <p className="text-xs" style={{ color: 'rgb(var(--content-muted))' }}>
-                  Finance will review shortly.
+                  Admin will review shortly.
                 </p>
               </div>
             ) : (
@@ -99,38 +84,30 @@ export default function SupplementaryModal({
                     style={{ color: 'rgb(var(--content-secondary))' }}>
                     Amount (₹)
                   </label>
-                  <input
-                    type="number" min="1" step="1" value={amount}
+                  <input type="number" min="1" step="1" value={amount}
                     onChange={(e) => setAmount(e.target.value)}
                     placeholder="e.g. 50000"
                     className="w-full px-3 py-2.5 rounded-xl text-sm font-mono outline-none"
                     style={{
-                      background:  'rgb(var(--surface-elevated))',
-                      border:      '1px solid rgb(var(--border-subtle))',
-                      color:       'rgb(var(--content-primary))',
-                    }}
-                    required
-                  />
+                      background: 'rgb(var(--surface-elevated))',
+                      border: '1px solid rgb(var(--border-subtle))',
+                      color: 'rgb(var(--content-primary))',
+                    }} required />
                 </div>
-
                 <div>
                   <label className="text-xs font-medium block mb-1.5"
                     style={{ color: 'rgb(var(--content-secondary))' }}>
                     Justification <span style={{ color: 'rgb(var(--content-muted))' }}>(min 20 characters)</span>
                   </label>
-                  <textarea
-                    value={reason}
-                    onChange={(e) => setReason(e.target.value)}
+                  <textarea value={reason} onChange={(e) => setReason(e.target.value)}
                     rows={5}
-                    placeholder="Why is this supplementary budget required? Mention upcoming critical travel, scope changes, etc."
+                    placeholder="Why is this addition required?"
                     className="w-full px-3 py-2.5 rounded-xl text-sm outline-none resize-none"
                     style={{
-                      background:  'rgb(var(--surface-elevated))',
-                      border:      '1px solid rgb(var(--border-subtle))',
-                      color:       'rgb(var(--content-primary))',
-                    }}
-                    required
-                  />
+                      background: 'rgb(var(--surface-elevated))',
+                      border: '1px solid rgb(var(--border-subtle))',
+                      color: 'rgb(var(--content-primary))',
+                    }} required />
                   <p className="text-[10px] mt-1 text-right font-mono"
                     style={{ color: reason.trim().length < 20
                       ? 'rgb(var(--status-warning))'
@@ -138,7 +115,6 @@ export default function SupplementaryModal({
                     {reason.trim().length} / 20
                   </p>
                 </div>
-
                 {error && (
                   <div className="flex items-start gap-2 p-3 rounded-xl text-xs"
                     style={{
@@ -149,25 +125,18 @@ export default function SupplementaryModal({
                     <span>{error}</span>
                   </div>
                 )}
-
                 <div className="flex items-center gap-2 pt-2">
-                  <button
-                    type="button"
-                    onClick={() => { reset(); onClose(); }}
+                  <button type="button" onClick={() => { reset(); onClose(); }}
                     className="flex-1 px-4 py-2.5 rounded-xl text-sm font-semibold"
                     style={{
                       background: 'rgb(var(--surface-elevated))',
-                      color:      'rgb(var(--content-secondary))',
-                    }}
-                  >
+                      color: 'rgb(var(--content-secondary))',
+                    }}>
                     Cancel
                   </button>
-                  <button
-                    type="submit"
-                    disabled={mutation.isPending}
+                  <button type="submit" disabled={mutation.isPending}
                     className="flex-1 px-4 py-2.5 rounded-xl text-sm font-semibold text-white disabled:opacity-60"
-                    style={{ background: 'rgb(var(--accent))' }}
-                  >
+                    style={{ background: 'rgb(var(--accent))' }}>
                     {mutation.isPending ? 'Submitting…' : 'Submit Request'}
                   </button>
                 </div>

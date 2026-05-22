@@ -7,13 +7,67 @@
 // ─── Enums ───────────────────────────────────────────────────
 
 export enum UserRole {
-  EMPLOYEE = 'EMPLOYEE',
-  L1_APPROVER = 'L1_APPROVER',
-  L2_APPROVER = 'L2_APPROVER',
-  TRAVEL_DESK = 'TRAVEL_DESK',
-  FINANCE_ADMIN = 'FINANCE_ADMIN',
-  SUPER_ADMIN = 'SUPER_ADMIN',
+  OWNER       = 'OWNER',       // Single portal owner (was SUPER_ADMIN)
+  ADMIN       = 'ADMIN',       // Privileged operator (was FINANCE_ADMIN)
+  TRAVEL_TEAM = 'TRAVEL_TEAM', // Internal travel ops (was TRAVEL_DESK)
+  HOD         = 'HOD',         // Department head / approver (was L1/L2_APPROVER)
+  USER        = 'USER',        // Standard signed-in employee (was EMPLOYEE)
 }
+
+// ─── Phase 3 — Travel Request enums ──────────────────────────
+export enum UrgencyLevel {
+  NORMAL = 'NORMAL', // After 3 days
+  URGENT = 'URGENT', // Within 3 days
+}
+
+export enum RequestFor {
+  PW_MEMBER  = 'PW_MEMBER',
+  STUDENT    = 'STUDENT',
+  GUEST      = 'GUEST',
+  NEW_MEMBER = 'NEW_MEMBER',
+  EVENT      = 'EVENT',
+}
+
+export enum RequestKind {
+  NEW_REQUEST = 'NEW_REQUEST',
+  EXTENSION   = 'EXTENSION',
+}
+
+export enum ReservationKind {
+  TRAVEL          = 'TRAVEL',
+  STAY            = 'STAY',
+  TRAVEL_AND_STAY = 'TRAVEL_AND_STAY',
+}
+
+export enum TravelRequestStatus {
+  AUTO_APPROVED = 'AUTO_APPROVED',
+  PENDING_L1    = 'PENDING_L1',
+  PENDING_L2    = 'PENDING_L2',
+  PENDING_L3    = 'PENDING_L3',
+  APPROVED      = 'APPROVED',
+  REJECTED      = 'REJECTED',
+  CANCELLED     = 'CANCELLED',
+}
+
+export const REASON_OF_TRAVEL_OPTIONS = [
+  'Sudden planning','Immediate requirement','Urgent booking','Urgent travel','Business priority',
+  'Event execution','Launch event','Batch launch','Category launch','Seminar','Workshop',
+  'Shoot plan','Celebrations','Foundation day events','Exam centre visit','Board exam activities',
+  'Result activities','Student meet-up','Paper analysis','Topper visits','Student interview',
+  'Counselling issues','JEE-related travel','NEET-related travel','VP / centre visit',
+  'Site readiness','Infra setup','Studio setup','Classroom setup','Safety audit',
+  'On-ground execution','Client meetings','Government office visits','Vendor meets','Partner meetings',
+  'Sales visits','New joining','Immediate joining','Faculty onboarding','Training','Recruitment',
+  'Manpower requirement','Previous request expired','MMT technical issue','Hotel out of policy',
+  'Sold-out hotels','Rebookings','Cancellations','Wrong approver','Form expired','Hotel extension',
+  'Need room after 3 days','Stay extension','Hotel not available in MMT','Location mismatch',
+  'Emergency extension','Audit visits','Internal audit','SOP adherence check','PS audit',
+  'Investigation visits','YouTube shoot','Podcast recording','Camera crew requirements',
+  'Marketing events','Transfer mail received','Relocation to another city','Emergency relocation',
+  'Return to base location','Others',
+] as const;
+
+export type ReasonOfTravel = (typeof REASON_OF_TRAVEL_OPTIONS)[number];
 
 export enum GradeLevel {
   L1 = 'L1', // Junior

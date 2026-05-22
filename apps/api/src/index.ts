@@ -19,7 +19,8 @@ import userRoutes from './routes/users.routes';
 import employeeRoutes from './routes/employees.routes';
 import departmentRoutes from './routes/departments.routes';
 import budgetRoutes from './routes/budget.routes';
-import tripRoutes from './routes/trips.routes';
+import travelRequestRoutes from './routes/travel-requests.routes';
+import membersRoutes from './routes/members.routes';
 import notificationRoutes from './routes/notifications.routes';
 
 const app = express();
@@ -101,9 +102,10 @@ app.use('/api/v1/auth',          authLimiter, authRoutes);
 app.use('/api/v1/users',         userRoutes);
 app.use('/api/v1/employees',     employeeRoutes);
 app.use('/api/v1/departments',   departmentRoutes);
-app.use('/api/v1/budget',        budgetRoutes);
-app.use('/api/v1/trips',         tripRoutes);
-app.use('/api/v1/notifications', notificationRoutes);
+app.use('/api/v1/budget',          budgetRoutes);
+app.use('/api/v1/travel-requests', travelRequestRoutes);
+app.use('/api/v1/members',         membersRoutes);
+app.use('/api/v1/notifications',   notificationRoutes);
 
 // ─── 404 Handler ──────────────────────────────────────────────
 app.use((_req, res) => {

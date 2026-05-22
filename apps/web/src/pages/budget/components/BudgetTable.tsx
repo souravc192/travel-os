@@ -8,7 +8,7 @@ interface BudgetTableProps {
   onSelect?: (row: BudgetSummary) => void;
 }
 
-type SortKey = 'cost_centre' | 'department' | 'allocated' | 'consumed' | 'remaining' | 'utilization';
+type SortKey = 'department' | 'allocated' | 'consumed' | 'remaining' | 'utilization';
 
 function inr(n: number): string {
   if (n >= 1_00_00_000) return `₹${(n / 1_00_00_000).toFixed(2)}Cr`;
@@ -32,19 +32,16 @@ export default function BudgetTable({ rows, onSelect }: BudgetTableProps) {
   const sorted = useMemo(() => {
     const arr = [...rows];
     arr.sort((a, b) => {
-      let av: string | number;
-      let bv: string | number;
+      let av: string | number, bv: string | number;
       switch (sortKey) {
-        case 'cost_centre': av = a.costCentreCode;     bv = b.costCentreCode;     break;
         case 'department':  av = a.departmentName;     bv = b.departmentName;     break;
-        case 'allocated':   av = a.allocated;          bv = b.allocated;          break;
+        case 'allocated':   av = a.allocatedAnnual;    bv = b.allocatedAnnual;    break;
         case 'consumed':    av = a.consumed;           bv = b.consumed;           break;
         case 'remaining':   av = a.remaining;          bv = b.remaining;          break;
         case 'utilization': av = a.utilizationPct;     bv = b.utilizationPct;     break;
       }
       const cmp = typeof av === 'number' && typeof bv === 'number'
-        ? av - bv
-        : String(av).localeCompare(String(bv));
+        ? av - bv : String(av).localeCompare(String(bv));
       return sortDir === 'asc' ? cmp : -cmp;
     });
     return arr;
@@ -57,12 +54,10 @@ export default function BudgetTable({ rows, onSelect }: BudgetTableProps) {
 
   function Th({ k, children, align = 'left' }: { k: SortKey; children: React.ReactNode; align?: 'left' | 'right' }) {
     return (
-      <th
-        onClick={() => toggle(k)}
+      <th onClick={() => toggle(k)}
         className={`px-3 py-2.5 text-xs font-semibold uppercase tracking-wider cursor-pointer select-none
           ${align === 'right' ? 'text-right' : 'text-left'}`}
-        style={{ color: 'rgb(var(--content-muted))' }}
-      >
+        style={{ color: 'rgb(var(--content-muted))' }}>
         <span className="inline-flex items-center gap-1">
           {children}
           <ArrowUpDown className="w-3 h-3 opacity-50" />
@@ -87,7 +82,6 @@ export default function BudgetTable({ rows, onSelect }: BudgetTableProps) {
         <table className="w-full text-sm">
           <thead style={{ background: 'rgb(var(--surface-elevated))' }}>
             <tr>
-              <Th k="cost_centre">Cost Centre</Th>
               <Th k="department">Department</Th>
               <Th k="allocated"  align="right">Allocated</Th>
               <Th k="consumed"   align="right">Consumed</Th>
@@ -100,31 +94,25 @@ export default function BudgetTable({ rows, onSelect }: BudgetTableProps) {
             {sorted.map((r, i) => {
               const u = utilBadge(r.utilizationPct);
               return (
-                <motion.tr
-                  key={r.id}
-                  initial={{ opacity: 0, y: 4 }}
-                  animate={{ opacity: 1, y: 0 }}
+                <motion.tr key={r.id}
+                  initial={{ opacity: 0, y: 4 }} animate={{ opacity: 1, y: 0 }}
                   transition={{ delay: i * 0.03, duration: 0.3 }}
                   className="border-t cursor-pointer hover:bg-[rgb(var(--surface-elevated))]"
                   style={{ borderColor: 'rgb(var(--border-subtle))' }}
-                  onClick={() => onSelect?.(r)}
-                >
+                  onClick={() => onSelect?.(r)}>
                   <td className="px-3 py-3">
-                    <div className="font-mono text-xs font-semibold" style={{ color: 'rgb(var(--content-primary))' }}>
-                      {r.costCentreCode}
+                    <div className="text-xs font-semibold" style={{ color: 'rgb(var(--content-primary))' }}>
+                      {r.departmentName}
                     </div>
-                    <div className="text-[11px]" style={{ color: 'rgb(var(--content-muted))' }}>
-                      {r.costCentreName}
+                    <div className="text-[10px] font-mono" style={{ color: 'rgb(var(--content-muted))' }}>
+                      FY {r.fiscalYear}
                     </div>
-                  </td>
-                  <td className="px-3 py-3 text-xs" style={{ color: 'rgb(var(--content-secondary))' }}>
-                    {r.departmentName}
                   </td>
                   <td className="px-3 py-3 text-right font-mono text-xs" style={{ color: 'rgb(var(--content-primary))' }}>
-                    {inr(r.allocated)}
+                    {inr(r.allocatedAnnual)}
                     {r.supplementaryApproved > 0 && (
                       <div className="text-[10px]" style={{ color: 'rgb(var(--status-info))' }}>
-                        +{inr(r.supplementaryApproved)} supp
+                        +{inr(r.supplementaryApproved)} added
                       </div>
                     )}
                   </td>
@@ -140,21 +128,16 @@ export default function BudgetTable({ rows, onSelect }: BudgetTableProps) {
                       <div className="flex items-center gap-2">
                         <div className="w-20 h-1.5 rounded-full overflow-hidden"
                           style={{ background: 'rgb(var(--surface-overlay))' }}>
-                          <div className="h-full rounded-full transition-all"
-                            style={{
-                              width: `${Math.min(r.utilizationPct, 100)}%`,
-                              background: `rgb(${u.color})`,
-                            }} />
+                          <div className="h-full rounded-full"
+                            style={{ width: `${Math.min(r.utilizationPct, 100)}%`, background: `rgb(${u.color})` }} />
                         </div>
                         <span className="font-mono text-xs font-semibold w-12 text-right"
                           style={{ color: `rgb(${u.color})` }}>
                           {r.utilizationPct.toFixed(1)}%
                         </span>
                       </div>
-                      <span
-                        className="text-[10px] uppercase tracking-wide font-semibold"
-                        style={{ color: `rgb(${u.color})` }}
-                      >
+                      <span className="text-[10px] uppercase tracking-wide font-semibold"
+                        style={{ color: `rgb(${u.color})` }}>
                         {u.label}
                       </span>
                     </div>

@@ -80,7 +80,7 @@ export function selfOrAdmin(userIdParam = 'userId') {
       return;
     }
 
-    const isAdmin = [UserRole.SUPER_ADMIN, UserRole.TRAVEL_DESK].includes(req.user.role);
+    const isAdmin = [UserRole.OWNER, UserRole.ADMIN, UserRole.TRAVEL_TEAM].includes(req.user.role);
     const isSelf = req.user.sub === req.params[userIdParam];
 
     if (!isAdmin && !isSelf) {

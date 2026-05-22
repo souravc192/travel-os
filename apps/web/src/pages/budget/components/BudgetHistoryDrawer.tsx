@@ -115,11 +115,11 @@ export default function BudgetHistoryDrawer({ open, budgetId, title, onClose }: 
                                 style={{ color: `rgb(${meta.color})` }}>
                                 {meta.label}
                               </p>
-                              {entry.trip_code && (
+                              {entry.request_code && (
                                 <p className="text-[10px] font-mono mt-0.5 inline-flex items-center gap-1"
                                   style={{ color: 'rgb(var(--content-secondary))' }}>
                                   <Plane className="w-3 h-3" />
-                                  {entry.trip_code}
+                                  {entry.request_code}
                                 </p>
                               )}
                               {entry.note && (

@@ -6,50 +6,36 @@ import * as ctrl from '../controllers/budget.controller';
 const router = Router();
 
 // ─── Reads ────────────────────────────────────────────────────
-router.get('/summary',      authenticate, ctrl.getSummary);
+router.get('/summary', authenticate, ctrl.getMyBudget);
 
 router.get('/org-overview', authenticate,
-  authorize(UserRole.SUPER_ADMIN, UserRole.FINANCE_ADMIN, UserRole.TRAVEL_DESK),
+  authorize(UserRole.OWNER, UserRole.ADMIN, UserRole.TRAVEL_TEAM),
   ctrl.getOrgOverview);
 
-router.get('/alerts',       authenticate,
-  authorize(UserRole.SUPER_ADMIN, UserRole.FINANCE_ADMIN, UserRole.TRAVEL_DESK),
-  ctrl.listAlerts);
+router.get('/addition-requests', authenticate, ctrl.listAdditionRequests);
 
-router.get('/alert-thresholds', authenticate,
-  authorize(UserRole.SUPER_ADMIN, UserRole.FINANCE_ADMIN),
-  ctrl.listAlertThresholds);
-
-router.get('/supplementary', authenticate, ctrl.listSupplementary);
-
-router.get('/:id',           authenticate, ctrl.getById);
-router.get('/:id/history',   authenticate, ctrl.getHistory);
+router.get('/:id',         authenticate, ctrl.getById);
+router.get('/:id/history', authenticate, ctrl.getHistory);
 
 // ─── Writes ───────────────────────────────────────────────────
-router.post('/',  authenticate,
-  authorize(UserRole.FINANCE_ADMIN, UserRole.SUPER_ADMIN),
-  ctrl.createAllocation);
+router.post('/', authenticate,
+  authorize(UserRole.OWNER, UserRole.ADMIN),
+  ctrl.upsertAllocation);
 
 router.post('/:id/adjust', authenticate,
-  authorize(UserRole.FINANCE_ADMIN, UserRole.SUPER_ADMIN),
+  authorize(UserRole.OWNER, UserRole.ADMIN),
   ctrl.adjustBudget);
 
 router.post('/:id/consume', authenticate,
-  authorize(UserRole.FINANCE_ADMIN, UserRole.SUPER_ADMIN, UserRole.TRAVEL_DESK),
+  authorize(UserRole.OWNER, UserRole.ADMIN, UserRole.TRAVEL_TEAM),
   ctrl.consumeBudget);
 
-router.post('/supplementary', authenticate, ctrl.requestSupplementary);
+router.post('/addition-requests', authenticate,
+  authorize(UserRole.HOD, UserRole.ADMIN, UserRole.OWNER),
+  ctrl.requestAddition);
 
-router.post('/supplementary/:id/approve', authenticate,
-  authorize(UserRole.FINANCE_ADMIN, UserRole.SUPER_ADMIN),
-  ctrl.approveSupplementary);
-
-router.post('/alert-thresholds', authenticate,
-  authorize(UserRole.FINANCE_ADMIN, UserRole.SUPER_ADMIN),
-  ctrl.upsertAlertThreshold);
-
-router.delete('/alert-thresholds/:id', authenticate,
-  authorize(UserRole.SUPER_ADMIN),
-  ctrl.deleteAlertThreshold);
+router.post('/addition-requests/:id/decide', authenticate,
+  authorize(UserRole.ADMIN, UserRole.OWNER),
+  ctrl.decideAddition);
 
 export default router;

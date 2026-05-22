@@ -104,67 +104,50 @@ export const authApi = {
   updateTheme:        (theme: string) => api.patch('/auth/theme', { theme }),
 };
 
-export const employeeApi = {
-  list:   (params?: Record<string, unknown>) => api.get('/employees', { params }),
-  get:    (id: string) => api.get(`/employees/${id}`),
-  create: (data: unknown) => api.post('/employees', data),
-  update: (id: string, data: unknown) => api.patch(`/employees/${id}`, data),
-  import: (file: File) => {
-    const fd = new FormData();
-    fd.append('file', file);
-    return api.post('/employees/import', fd, { headers: { 'Content-Type': 'multipart/form-data' } });
-  },
-};
-
-export const tripApi = {
-  list:       (params?: Record<string, unknown>) => api.get('/trips', { params }),
-  get:        (id: string) => api.get(`/trips/${id}`),
-  create:     (data: unknown) => api.post('/trips', data),
-  update:     (id: string, data: unknown) => api.patch(`/trips/${id}`, data),
-  submit:     (id: string) => api.post(`/trips/${id}/submit`),
-  cancel:     (id: string, reason: string) => api.post(`/trips/${id}/cancel`, { reason }),
-  myTrips:    (params?: Record<string, unknown>) => api.get('/trips/my', { params }),
-};
-
-export const approvalApi = {
-  pending:     (params?: Record<string, unknown>) => api.get('/approvals/pending', { params }),
-  get:         (tripId: string) => api.get(`/approvals/${tripId}`),
-  approve:     (tripId: string, data: { comment?: string; conditions?: string }) =>
-    api.post(`/approvals/${tripId}/approve`, data),
-  reject:      (tripId: string, data: { comment: string }) =>
-    api.post(`/approvals/${tripId}/reject`, data),
-  sendBack:    (tripId: string, data: { comment: string }) =>
-    api.post(`/approvals/${tripId}/send-back`, data),
-  bulkApprove: (tripIds: string[], comment?: string) =>
-    api.post('/approvals/bulk-approve', { tripIds, comment }),
-};
-
 export const budgetApi = {
-  summary:          (params?: { costCentreId?: string; fiscalYear?: string }) =>
+  summary:          (params?: { departmentId?: string; fiscalYear?: string }) =>
     api.get('/budget/summary', { params }),
   orgOverview:      (params?: { fiscalYear?: string }) =>
     api.get('/budget/org-overview', { params }),
   getById:          (id: string) => api.get(`/budget/${id}`),
   history:          (budgetId: string, params?: { limit?: number }) =>
     api.get(`/budget/${budgetId}/history`, { params }),
-  createAllocation: (data: { costCentreId: string; fiscalYear: string; allocated: number }) =>
+  upsertAllocation: (data: { departmentId: string; fiscalYear: string; allocatedAnnual: number }) =>
     api.post('/budget', data),
   adjust:           (id: string, data: { delta: number; note: string }) =>
     api.post(`/budget/${id}/adjust`, data),
-  consume:          (id: string, data: { amount: number; tripId?: string; note?: string }) =>
+  consume:          (id: string, data: { amount: number; travelRequestId?: string; note?: string }) =>
     api.post(`/budget/${id}/consume`, data),
-  listSupplementary:     (params?: { status?: string }) =>
-    api.get('/budget/supplementary', { params }),
-  requestSupplementary:  (data: { amount: number; reason: string; costCentreId?: string; fiscalYear?: string }) =>
-    api.post('/budget/supplementary', data),
-  approveSupplementary:  (id: string, data: { action: 'APPROVE' | 'REJECT'; note?: string }) =>
-    api.post(`/budget/supplementary/${id}/approve`, data),
-  listAlerts:           (params?: { budgetId?: string }) =>
-    api.get('/budget/alerts', { params }),
-  listAlertThresholds:  () => api.get('/budget/alert-thresholds'),
-  upsertAlertThreshold: (data: { thresholdPct: number; channel?: string; label?: string; isActive?: boolean }) =>
-    api.post('/budget/alert-thresholds', data),
-  deleteAlertThreshold: (id: string) => api.delete(`/budget/alert-thresholds/${id}`),
+  listAdditions:    (params?: { status?: string }) =>
+    api.get('/budget/addition-requests', { params }),
+  requestAddition:  (data: { departmentBudgetId: string; amount: number; reason: string }) =>
+    api.post('/budget/addition-requests', data),
+  decideAddition:   (id: string, data: { action: 'APPROVE' | 'REJECT'; note?: string }) =>
+    api.post(`/budget/addition-requests/${id}/decide`, data),
+};
+
+export const memberApi = {
+  import:      (file: File) => {
+    const fd = new FormData();
+    fd.append('file', file);
+    return api.post('/members/import', fd, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    });
+  },
+  lookup:      (employeeCode: string) =>
+    api.get('/employees/lookup', { params: { employeeCode } }),
+  list:        (params?: Record<string, unknown>) => api.get('/employees', { params }),
+};
+
+export const travelRequestApi = {
+  list:    (params?: Record<string, unknown>) => api.get('/travel-requests', { params }),
+  get:     (id: string) => api.get(`/travel-requests/${id}`),
+  create:  (data: unknown) => api.post('/travel-requests', data),
+  approve: (id: string, data: { note?: string }) => api.post(`/travel-requests/${id}/approve`, data),
+  reject:  (id: string, data: { note: string }) => api.post(`/travel-requests/${id}/reject`, data),
+  cancel:  (id: string, data: { reason: string }) => api.post(`/travel-requests/${id}/cancel`, data),
+  pendingApprovals: (params?: Record<string, unknown>) =>
+    api.get('/travel-requests/pending-approvals', { params }),
 };
 
 export const notificationApi = {
@@ -175,8 +158,7 @@ export const notificationApi = {
 };
 
 export const departmentApi = {
-  list:        () => api.get('/departments'),
-  costCentres: () => api.get('/departments/cost-centres'),
+  list: () => api.get('/departments'),
 };
 
 export default api;
