@@ -13,32 +13,32 @@ import NotificationDrawer from './NotificationDrawer';
 import CommandPalette from '../ui/CommandPalette';
 import ThemeSwitcher from '../ui/ThemeSwitcher';
 
-// ─── Nav items per role ───────────────────────────────────────
+// ─── Nav items per role (Phase 3 — 5-role model) ──────────────
 function getNavItems(role: UserRole) {
   const all = [
-    { path: '/dashboard', label: 'Dashboard',   icon: LayoutDashboard, roles: ['ALL'] },
-    { path: '/trips',     label: 'My Trips',     icon: Plane,           roles: [UserRole.EMPLOYEE, UserRole.L1_APPROVER, UserRole.L2_APPROVER] },
-    { path: '/approvals', label: 'Approvals',    icon: CheckSquare,     roles: [UserRole.L1_APPROVER, UserRole.L2_APPROVER, UserRole.TRAVEL_DESK, UserRole.SUPER_ADMIN] },
-    { path: '/bookings',  label: 'Bookings',     icon: Package,         roles: [UserRole.TRAVEL_DESK, UserRole.SUPER_ADMIN] },
-    { path: '/vendors',   label: 'Vendors',      icon: Building2,       roles: [UserRole.TRAVEL_DESK, UserRole.SUPER_ADMIN] },
-    { path: '/invoices',  label: 'Invoices',     icon: Receipt,         roles: [UserRole.FINANCE_ADMIN, UserRole.SUPER_ADMIN] },
-    { path: '/expenses',  label: 'Expenses',     icon: Wallet,          roles: [UserRole.FINANCE_ADMIN, UserRole.SUPER_ADMIN] },
-    { path: '/budget',    label: 'Budget',       icon: BarChart3,       roles: [UserRole.EMPLOYEE, UserRole.L1_APPROVER, UserRole.L2_APPROVER, UserRole.TRAVEL_DESK, UserRole.FINANCE_ADMIN, UserRole.SUPER_ADMIN] },
-    { path: '/analytics', label: 'Analytics',    icon: BarChart3,       roles: [UserRole.TRAVEL_DESK, UserRole.FINANCE_ADMIN, UserRole.SUPER_ADMIN] },
-    { path: '/users',     label: 'Users',        icon: Users,           roles: [UserRole.SUPER_ADMIN] },
-    { path: '/settings',  label: 'Settings',     icon: Settings,        roles: [UserRole.SUPER_ADMIN] },
+    { path: '/dashboard',       label: 'Dashboard',     icon: LayoutDashboard, roles: ['ALL'] },
+    { path: '/travel/new',      label: 'New Request',   icon: Plane,           roles: ['ALL'] },
+    { path: '/travel/requests', label: 'My Requests',   icon: MapPin,          roles: ['ALL'] },
+    { path: '/approvals',       label: 'Approvals',     icon: CheckSquare,     roles: [UserRole.HOD, UserRole.TRAVEL_TEAM, UserRole.ADMIN, UserRole.OWNER] },
+    { path: '/bookings',        label: 'Bookings',      icon: Package,         roles: [UserRole.TRAVEL_TEAM, UserRole.OWNER, UserRole.ADMIN] },
+    { path: '/vendors',         label: 'Vendors',       icon: Building2,       roles: [UserRole.TRAVEL_TEAM, UserRole.OWNER, UserRole.ADMIN] },
+    { path: '/invoices',        label: 'Invoices',      icon: Receipt,         roles: [UserRole.ADMIN, UserRole.OWNER] },
+    { path: '/budget',          label: 'Budget',        icon: Wallet,          roles: ['ALL'] },
+    { path: '/analytics',       label: 'Analytics',     icon: BarChart3,       roles: [UserRole.ADMIN, UserRole.OWNER, UserRole.TRAVEL_TEAM] },
+    { path: '/admin/members',   label: 'Members',       icon: Users,           roles: [UserRole.ADMIN, UserRole.OWNER] },
+    { path: '/users',           label: 'Users',         icon: Users,           roles: [UserRole.OWNER] },
+    { path: '/settings',        label: 'Settings',      icon: Settings,        roles: [UserRole.OWNER] },
   ];
   return all.filter(item => item.roles.includes('ALL') || item.roles.includes(role));
 }
 
 // ─── Role badge ───────────────────────────────────────────────
 const ROLE_LABELS: Record<UserRole, string> = {
-  [UserRole.EMPLOYEE]:     'Employee',
-  [UserRole.L1_APPROVER]:  'L1 Approver',
-  [UserRole.L2_APPROVER]:  'L2 Approver',
-  [UserRole.TRAVEL_DESK]:  'Travel Desk',
-  [UserRole.FINANCE_ADMIN]:'Finance Admin',
-  [UserRole.SUPER_ADMIN]:  'Super Admin',
+  [UserRole.OWNER]:       'Owner',
+  [UserRole.ADMIN]:       'Admin',
+  [UserRole.TRAVEL_TEAM]: 'Travel Team',
+  [UserRole.HOD]:         'HOD',
+  [UserRole.USER]:        'User',
 };
 
 export default function AppLayout() {

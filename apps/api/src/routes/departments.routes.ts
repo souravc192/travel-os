@@ -18,17 +18,12 @@ router.get('/', authenticate, async (_req, res, next) => {
   } catch (err) { next(err); }
 });
 
-// GET /api/v1/departments/cost-centres
+// GET /api/v1/departments/cost-centres — retained for backwards compat (Phase 1 callers)
 router.get('/cost-centres', authenticate, async (_req, res, next) => {
   try {
-    const result = await db.query(
-      `SELECT cc.*, d.name AS department_name, d.code AS department_code
-       FROM cost_centres cc
-       JOIN departments d ON d.id = cc.department_id
-       WHERE cc.is_active = true
-       ORDER BY d.name, cc.name`
-    );
-    res.json({ success: true, data: result.rows });
+    // Cost-centre concept is deprecated in Phase 3. Returning an empty list
+    // is intentional — callers should migrate to /departments.
+    res.json({ success: true, data: [] });
   } catch (err) { next(err); }
 });
 

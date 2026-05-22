@@ -16,14 +16,17 @@ interface AuthEmployee {
   employeeCode: string;
   name: string;
   designation: string | null;
-  gradeLevel: string | null;
+  groupLabel: string | null;
   departmentId: string | null;
   departmentName: string | null;
-  costCentreId: string | null;
   onboardingComplete: boolean;
   avatarUrl: string | null;
-  l1Approver: { id: string; name: string } | null;
-  l2Approver: { id: string; name: string } | null;
+  l1Email: string | null;
+  l2Email: string | null;
+  l3Email: string | null;
+  hodEmail: string | null;
+  cxoEmail: string | null;
+  noOfApprovers: number;
 }
 
 interface AuthState {

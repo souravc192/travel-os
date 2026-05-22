@@ -13,7 +13,7 @@ import {
   extractBearerToken,
 } from '../utils/jwt';
 import { logger } from '../config/logger';
-import { AppTheme, GradeLevel } from '@travel-os/shared-types';
+import { AppTheme } from '@travel-os/shared-types';
 
 // ─── POST /auth/login ─────────────────────────────────────────
 export async function login(req: Request, res: Response, next: NextFunction): Promise<void> {
@@ -23,7 +23,7 @@ export async function login(req: Request, res: Response, next: NextFunction): Pr
     // 1. Find user
     const userResult = await db.query(
       `SELECT u.*, e.id AS employee_id, e.name, e.onboarding_complete,
-              e.grade_level, e.department_id, e.cost_centre_id
+              e.group_label, e.department_id
        FROM users u
        LEFT JOIN employees e ON e.user_id = u.id
        WHERE u.email = $1 AND u.is_active = true`,
@@ -93,9 +93,8 @@ export async function login(req: Request, res: Response, next: NextFunction): Pr
         employee: user.employee_id ? {
           id: user.employee_id,
           name: user.name,
-          gradeLevel: user.grade_level,
+          groupLabel: user.group_label,
           departmentId: user.department_id,
-          costCentreId: user.cost_centre_id,
           onboardingComplete: user.onboarding_complete,
         } : null,
         requiresOnboarding: user.employee_id
@@ -230,18 +229,13 @@ export async function getMe(req: Request, res: Response, next: NextFunction): Pr
       `SELECT
         u.id, u.email, u.role, u.theme, u.last_login_at, u.created_at,
         e.id AS employee_id, e.employee_code, e.name, e.designation,
-        e.grade_level, e.phone, e.avatar_url, e.onboarding_complete,
-        e.cost_centre_id, e.department_id,
-        d.name AS department_name, d.code AS department_code,
-        cc.code AS cost_centre_code, cc.name AS cost_centre_name,
-        l1.name AS l1_approver_name, l1.id AS l1_approver_id,
-        l2.name AS l2_approver_name, l2.id AS l2_approver_id
+        e.group_label, e.phone, e.avatar_url, e.onboarding_complete,
+        e.department_id, e.l1_email, e.l2_email, e.l3_email,
+        e.no_of_approvers, e.hod_email, e.cxo_email,
+        d.name AS department_name, d.code AS department_code
        FROM users u
        LEFT JOIN employees e ON e.user_id = u.id
        LEFT JOIN departments d ON d.id = e.department_id
-       LEFT JOIN cost_centres cc ON cc.id = e.cost_centre_id
-       LEFT JOIN employees l1 ON l1.id = e.l1_approver_id
-       LEFT JOIN employees l2 ON l2.id = e.l2_approver_id
        WHERE u.id = $1`,
       [req.user!.sub]
     );
@@ -268,18 +262,19 @@ export async function getMe(req: Request, res: Response, next: NextFunction): Pr
           employeeCode: row.employee_code,
           name: row.name,
           designation: row.designation,
-          gradeLevel: row.grade_level,
+          groupLabel: row.group_label,
           phone: row.phone,
           avatarUrl: row.avatar_url,
           onboardingComplete: row.onboarding_complete,
           departmentId: row.department_id,
           departmentName: row.department_name,
           departmentCode: row.department_code,
-          costCentreId: row.cost_centre_id,
-          costCentreCode: row.cost_centre_code,
-          costCentreName: row.cost_centre_name,
-          l1Approver: row.l1_approver_id ? { id: row.l1_approver_id, name: row.l1_approver_name } : null,
-          l2Approver: row.l2_approver_id ? { id: row.l2_approver_id, name: row.l2_approver_name } : null,
+          l1Email: row.l1_email,
+          l2Email: row.l2_email,
+          l3Email: row.l3_email,
+          hodEmail: row.hod_email,
+          cxoEmail: row.cxo_email,
+          noOfApprovers: row.no_of_approvers,
         } : null,
       },
     });
@@ -291,8 +286,7 @@ export async function getMe(req: Request, res: Response, next: NextFunction): Pr
 // ─── POST /auth/onboarding ────────────────────────────────────
 export async function completeOnboarding(req: Request, res: Response, next: NextFunction): Promise<void> {
   try {
-    const { designation, departmentId, costCentreId, phone, gradeLevel } = req.body;
-    const userId = req.user!.sub;
+    const { designation, departmentId, phone, groupLabel } = req.body;
     const employeeId = req.user!.employeeId;
 
     if (!employeeId) {
@@ -303,21 +297,15 @@ export async function completeOnboarding(req: Request, res: Response, next: Next
       return;
     }
 
-    // Validate grade level
-    if (!Object.values(GradeLevel).includes(gradeLevel)) {
-      res.status(400).json({
-        success: false,
-        error: { code: 'INVALID_GRADE', message: 'Invalid grade level.' },
-      });
-      return;
-    }
-
     await db.query(
       `UPDATE employees SET
-        designation = $1, department_id = $2, cost_centre_id = $3,
-        phone = $4, grade_level = $5, onboarding_complete = true
-       WHERE id = $6`,
-      [designation, departmentId, costCentreId, phone, gradeLevel, employeeId]
+        designation = COALESCE($1, designation),
+        department_id = COALESCE($2, department_id),
+        phone = COALESCE($3, phone),
+        group_label = COALESCE($4, group_label),
+        onboarding_complete = true
+       WHERE id = $5`,
+      [designation, departmentId, phone, groupLabel, employeeId]
     );
 
     logger.info(`Onboarding complete for employee: ${employeeId}`);

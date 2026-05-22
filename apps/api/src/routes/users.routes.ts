@@ -7,7 +7,7 @@ import db, { buildPaginationClause } from '../config/db';
 const router = Router();
 
 // GET /api/v1/users — Super Admin only
-router.get('/', authenticate, authorize(UserRole.SUPER_ADMIN), async (req, res, next) => {
+router.get('/', authenticate, authorize(UserRole.OWNER), async (req, res, next) => {
   try {
     const { page = 1, limit = 20, search = '', role } = req.query;
     const { offset, limit: lim, clause } = buildPaginationClause(+page, +limit);
@@ -24,7 +24,7 @@ router.get('/', authenticate, authorize(UserRole.SUPER_ADMIN), async (req, res, 
     const [data, countRes] = await Promise.all([
       db.query(
         `SELECT u.id, u.email, u.role, u.theme, u.is_active, u.last_login_at, u.created_at,
-                e.id AS employee_id, e.name, e.employee_code, e.grade_level, e.designation,
+                e.id AS employee_id, e.name, e.employee_code, e.designation, e.group_label,
                 d.name AS department_name
          FROM users u
          LEFT JOIN employees e ON e.user_id = u.id
@@ -47,7 +47,7 @@ router.get('/', authenticate, authorize(UserRole.SUPER_ADMIN), async (req, res, 
 });
 
 // PATCH /api/v1/users/:id/role
-router.patch('/:id/role', authenticate, authorize(UserRole.SUPER_ADMIN), async (req, res, next) => {
+router.patch('/:id/role', authenticate, authorize(UserRole.OWNER), async (req, res, next) => {
   try {
     const { role } = req.body;
     if (!Object.values(UserRole).includes(role)) {
@@ -60,7 +60,7 @@ router.patch('/:id/role', authenticate, authorize(UserRole.SUPER_ADMIN), async (
 });
 
 // PATCH /api/v1/users/:id/deactivate
-router.patch('/:id/deactivate', authenticate, authorize(UserRole.SUPER_ADMIN), async (req, res, next) => {
+router.patch('/:id/deactivate', authenticate, authorize(UserRole.OWNER), async (req, res, next) => {
   try {
     await db.query('UPDATE users SET is_active = false WHERE id = $1', [req.params.id]);
     res.json({ success: true, message: 'User deactivated.' });

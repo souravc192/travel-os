@@ -8,7 +8,10 @@
     "start": "node dist/index.js",
     "migrate": "psql $DATABASE_URL -f src/migrations/001_initial_schema.sql",
     "seed": "psql $DATABASE_URL -f src/migrations/001b_seed.sql",
-    "migrate:all": "npm run migrate && npm run seed",
+    "migrate:phase2": "psql $DATABASE_URL -f src/migrations/002_budget_alerts.sql",
+    "migrate:phase3": "psql $DATABASE_URL -f src/migrations/003_phase3_overhaul.sql",
+    "seed:phase3": "psql $DATABASE_URL -f src/migrations/003b_seed.sql",
+    "migrate:all": "npm run migrate && npm run seed && npm run migrate:phase2 && npm run migrate:phase3 && npm run seed:phase3",
     "type-check": "tsc --noEmit"
   },
   "dependencies": {
@@ -25,6 +28,8 @@
     "ioredis": "^5.3.2",
     "jsonwebtoken": "^9.0.2",
     "morgan": "^1.10.0",
+    "multer": "^1.4.5-lts.1",
+    "exceljs": "^4.4.0",
     "pg": "^8.11.3",
     "uuid": "^9.0.1",
     "winston": "^3.11.0",
@@ -38,6 +43,7 @@
     "@types/express": "^4.17.21",
     "@types/jsonwebtoken": "^9.0.5",
     "@types/morgan": "^1.9.9",
+    "@types/multer": "^1.4.11",
     "@types/node": "^20.11.5",
     "@types/pg": "^8.10.9",
     "@types/uuid": "^9.0.7",

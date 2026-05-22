@@ -10,7 +10,7 @@ import {
 } from 'recharts';
 import { useAuthStore } from '../../store/auth.store';
 import { UserRole } from '@travel-os/shared-types';
-import { budgetApi, tripApi, approvalApi } from '../../lib/api';
+import { budgetApi, travelRequestApi } from '../../lib/api';
 import { MetricSkeleton } from '../../components/ui/PageLoader';
 
 // ─── Animated counter ─────────────────────────────────────────
@@ -193,14 +193,14 @@ export default function DashboardPage() {
       try {
         const [budRes, tripRes] = await Promise.allSettled([
           budgetApi.summary(),
-          tripApi.myTrips({ limit: 5 }),
+          travelRequestApi.list({ limit: 5 }),
         ]);
         if (budRes.status === 'fulfilled')  setBudget(budRes.value.data.data);
         if (tripRes.status === 'fulfilled') setTrips(tripRes.value.data.data);
 
-        if (role !== UserRole.EMPLOYEE) {
-          const apRes = await approvalApi.pending({ limit: 1 });
-          setPending(apRes.data.meta?.total ?? 0);
+        if (role !== UserRole.USER) {
+          const apRes = await travelRequestApi.pendingApprovals();
+          setPending(apRes.data.data?.length ?? 0);
         }
       } catch { /* silent */ }
       finally   { setLoading(false); }
@@ -208,10 +208,9 @@ export default function DashboardPage() {
     load();
   }, [role]);
 
-  const isAdmin = role === UserRole.SUPER_ADMIN;
-  const isDesk  = role === UserRole.TRAVEL_DESK;
-  const isFin   = role === UserRole.FINANCE_ADMIN;
-  const isApprover = role === UserRole.L1_APPROVER || role === UserRole.L2_APPROVER;
+  const isAdmin = role === UserRole.OWNER || role === UserRole.ADMIN;
+  const isDesk  = role === UserRole.TRAVEL_TEAM;
+  const isApprover = role === UserRole.HOD;
 
   // Mock KPI data (real data comes from /budget/org-overview in Phase 8)
   const kpis = [
@@ -247,10 +246,10 @@ export default function DashboardPage() {
           </h1>
           <p className="text-sm mt-0.5" style={{ color: 'rgb(var(--content-muted))' }}>
             {new Date().toLocaleDateString('en-IN', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}
-            {employee?.gradeLevel && (
+            {employee?.groupLabel && (
               <span className="ml-2 font-mono px-1.5 py-0.5 rounded text-[10px]"
                 style={{ background: 'rgb(var(--accent-subtle))', color: 'rgb(var(--accent-text))' }}>
-                Grade {employee.gradeLevel}
+                {employee.groupLabel}
               </span>
             )}
           </p>
@@ -345,7 +344,7 @@ export default function DashboardPage() {
 
           <BudgetRing
             pct={budgetPct}
-            label={employee?.costCentreName ?? 'Cost Centre'}
+            label={employee?.departmentName ?? 'Department'}
             value={budget
               ? `₹${((budget as any).consumed / 100000).toFixed(1)}L of ₹${(((budget as any).allocated + (budget as any).supplementaryApproved) / 100000).toFixed(1)}L`
               : '₹11.8L of ₹25L'

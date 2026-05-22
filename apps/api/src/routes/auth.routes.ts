@@ -38,13 +38,11 @@ router.post(
   '/onboarding',
   authenticate,
   [
-    body('designation').notEmpty().withMessage('Designation is required.').trim(),
-    body('departmentId').isUUID().withMessage('Valid department ID is required.'),
-    body('costCentreId').isUUID().withMessage('Valid cost centre ID is required.'),
     body('phone')
       .matches(/^[6-9]\d{9}$/).withMessage('Valid 10-digit Indian mobile number is required.'),
-    body('gradeLevel')
-      .isIn(['L1', 'L2', 'L3', 'L4', 'L5']).withMessage('Grade level must be L1-L5.'),
+    body('designation').optional().isString(),
+    body('departmentId').optional().isUUID(),
+    body('groupLabel').optional().isString(),
   ],
   validateRequest,
   authController.completeOnboarding

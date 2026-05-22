@@ -9,9 +9,14 @@ import PageLoader from '../components/ui/PageLoader';
 // ─── Lazy-loaded Pages ────────────────────────────────────────
 const LoginPage        = lazy(() => import('../pages/auth/LoginPage'));
 const OnboardingPage   = lazy(() => import('../pages/onboarding/OnboardingPage'));
-const DashboardPage    = lazy(() => import('../pages/dashboard/DashboardPage'));
-const BudgetDashboard  = lazy(() => import('../pages/budget/BudgetDashboardPage'));
-const NotFoundPage     = lazy(() => import('../pages/NotFoundPage'));
+const DashboardPage           = lazy(() => import('../pages/dashboard/DashboardPage'));
+const BudgetDashboard         = lazy(() => import('../pages/budget/BudgetDashboardPage'));
+const NewTravelRequestPage    = lazy(() => import('../pages/travel/NewTravelRequestPage'));
+const MyTravelRequestsPage    = lazy(() => import('../pages/travel/MyTravelRequestsPage'));
+const TravelRequestDetailPage = lazy(() => import('../pages/travel/TravelRequestDetailPage'));
+const ApprovalsInboxPage      = lazy(() => import('../pages/approvals/ApprovalsInboxPage'));
+const MembersAdminPage        = lazy(() => import('../pages/admin/MembersAdminPage'));
+const NotFoundPage            = lazy(() => import('../pages/NotFoundPage'));
 
 // ─── Auth Initializer (runs on every app load) ────────────────
 // Silently refreshes the access token using the httpOnly refresh cookie
@@ -115,53 +120,45 @@ const router = createBrowserRouter([
               { path: 'dashboard', element: <DashboardPage /> },
               { path: 'budget',    element: <BudgetDashboard /> },
 
-              // Employee routes
+              // Travel module (all signed-in users)
+              { path: 'travel/new',           element: <NewTravelRequestPage /> },
+              { path: 'travel/requests',      element: <MyTravelRequestsPage /> },
+              { path: 'travel/requests/:id',  element: <TravelRequestDetailPage /> },
+
+              // Approval inbox (HOD/Travel Team/Admin/Owner)
               {
-                element: <RequireAuth allowedRoles={[UserRole.EMPLOYEE, UserRole.L1_APPROVER, UserRole.L2_APPROVER, UserRole.TRAVEL_DESK, UserRole.FINANCE_ADMIN, UserRole.SUPER_ADMIN]} />,
+                element: <RequireAuth allowedRoles={[UserRole.HOD, UserRole.TRAVEL_TEAM, UserRole.ADMIN, UserRole.OWNER]} />,
                 children: [
-                  { path: 'trips',        element: <PageLoader /> }, // Populated in Phase 3
-                  { path: 'trips/new',    element: <PageLoader /> },
-                  { path: 'trips/:id',    element: <PageLoader /> },
-                  { path: 'profile',      element: <PageLoader /> },
+                  { path: 'approvals',       element: <ApprovalsInboxPage /> },
+                  { path: 'approvals/:id',   element: <TravelRequestDetailPage /> },
                 ],
               },
 
-              // Approver routes
+              // Travel Team routes
               {
-                element: <RequireAuth allowedRoles={[UserRole.L1_APPROVER, UserRole.L2_APPROVER, UserRole.TRAVEL_DESK, UserRole.SUPER_ADMIN]} />,
-                children: [
-                  { path: 'approvals',         element: <PageLoader /> },
-                  { path: 'approvals/:tripId', element: <PageLoader /> },
-                ],
-              },
-
-              // Travel Desk routes
-              {
-                element: <RequireAuth allowedRoles={[UserRole.TRAVEL_DESK, UserRole.SUPER_ADMIN]} />,
+                element: <RequireAuth allowedRoles={[UserRole.TRAVEL_TEAM, UserRole.OWNER, UserRole.ADMIN]} />,
                 children: [
                   { path: 'bookings',   element: <PageLoader /> },
                   { path: 'vendors',    element: <PageLoader /> },
-                  { path: 'rate-cards', element: <PageLoader /> },
                 ],
               },
 
-              // Finance routes
+              // Admin / Owner — members + budget admin
               {
-                element: <RequireAuth allowedRoles={[UserRole.FINANCE_ADMIN, UserRole.SUPER_ADMIN]} />,
+                element: <RequireAuth allowedRoles={[UserRole.ADMIN, UserRole.OWNER]} />,
                 children: [
-                  { path: 'invoices',  element: <PageLoader /> },
-                  { path: 'expenses',  element: <PageLoader /> },
-                  { path: 'gst',       element: <PageLoader /> },
+                  { path: 'invoices',         element: <PageLoader /> },
+                  { path: 'analytics',        element: <PageLoader /> },
+                  { path: 'admin/members',    element: <MembersAdminPage /> },
                 ],
               },
 
-              // Admin routes
+              // Owner only
               {
-                element: <RequireAuth allowedRoles={[UserRole.SUPER_ADMIN]} />,
+                element: <RequireAuth allowedRoles={[UserRole.OWNER]} />,
                 children: [
                   { path: 'users',     element: <PageLoader /> },
                   { path: 'settings',  element: <PageLoader /> },
-                  { path: 'analytics', element: <PageLoader /> },
                 ],
               },
             ],

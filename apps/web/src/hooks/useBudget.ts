@@ -4,12 +4,10 @@ import { budgetApi } from '../lib/api';
 // ─── Types ────────────────────────────────────────────────────
 export interface BudgetSummary {
   id: string;
-  costCentreId: string;
-  costCentreCode: string;
-  costCentreName: string;
+  departmentId: string;
   departmentName: string;
   fiscalYear: string;
-  allocated: number;
+  allocatedAnnual: number;
   consumed: number;
   supplementaryApproved: number;
   remaining: number;
@@ -22,45 +20,43 @@ export interface BudgetHistoryEntry {
   amount: number;
   balance_after: number;
   note: string | null;
-  trip_id: string | null;
-  trip_code: string | null;
+  travel_request_id: string | null;
+  request_code: string | null;
   created_at: string;
   actor_email: string | null;
   actor_name: string | null;
 }
 
-export interface SupplementaryRequest {
+export interface BudgetAdditionRequest {
   id: string;
-  budget_id: string;
-  cost_centre_code: string;
-  cost_centre_name: string;
+  department_budget_id: string;
+  department_id: string;
+  department_name: string;
   fiscal_year: string;
   amount: number;
   reason: string;
-  status: 'PENDING' | 'FINANCE_APPROVED' | 'SUPER_APPROVED' | 'REJECTED';
-  finance_note: string | null;
-  super_note:   string | null;
+  status: 'PENDING' | 'APPROVED' | 'REJECTED';
+  decision_note: string | null;
   requested_by_name: string;
+  requested_by_email: string;
   created_at: string;
 }
 
 // ─── Query Keys ───────────────────────────────────────────────
 export const budgetKeys = {
-  all:             ['budget'] as const,
-  summary:         (costCentreId?: string, fy?: string) =>
-    ['budget', 'summary', costCentreId ?? 'me', fy ?? 'current'] as const,
-  orgOverview:     (fy?: string) => ['budget', 'org-overview', fy ?? 'current'] as const,
-  detail:          (id: string)  => ['budget', 'detail', id] as const,
-  history:         (id: string)  => ['budget', 'history', id] as const,
-  supplementary:   (status?: string) => ['budget', 'supplementary', status ?? 'all'] as const,
-  alerts:          (budgetId?: string) => ['budget', 'alerts', budgetId ?? 'all'] as const,
-  alertThresholds: ['budget', 'alert-thresholds'] as const,
+  all:              ['budget'] as const,
+  summary:          (deptId?: string, fy?: string) =>
+    ['budget', 'summary', deptId ?? 'me', fy ?? 'current'] as const,
+  orgOverview:      (fy?: string) => ['budget', 'org-overview', fy ?? 'current'] as const,
+  detail:           (id: string)  => ['budget', 'detail', id] as const,
+  history:          (id: string)  => ['budget', 'history', id] as const,
+  additions:        (status?: string) => ['budget', 'additions', status ?? 'all'] as const,
 };
 
 // ─── Queries ──────────────────────────────────────────────────
-export function useBudgetSummary(opts?: { costCentreId?: string; fiscalYear?: string }) {
+export function useBudgetSummary(opts?: { departmentId?: string; fiscalYear?: string }) {
   return useQuery({
-    queryKey: budgetKeys.summary(opts?.costCentreId, opts?.fiscalYear),
+    queryKey: budgetKeys.summary(opts?.departmentId, opts?.fiscalYear),
     queryFn: async () => {
       const res = await budgetApi.summary(opts);
       return res.data.data as BudgetSummary | null;
@@ -78,7 +74,7 @@ export function useOrgOverview(fiscalYear?: string) {
         data: BudgetSummary[];
         meta: {
           fiscalYear: string;
-          totals: { allocated: number; consumed: number; supplementaryApproved: number; remaining: number; overallUtilization: number };
+          totals: { allocatedAnnual: number; consumed: number; supplementaryApproved: number; remaining: number; overallUtilization: number };
           count: number;
         };
       };
@@ -97,54 +93,32 @@ export function useBudgetHistory(budgetId: string | undefined) {
   });
 }
 
-export function useSupplementaryRequests(status?: string) {
+export function useAdditionRequests(status?: string) {
   return useQuery({
-    queryKey: budgetKeys.supplementary(status),
+    queryKey: budgetKeys.additions(status),
     queryFn: async () => {
-      const res = await budgetApi.listSupplementary({ status });
-      return res.data.data as SupplementaryRequest[];
-    },
-  });
-}
-
-export function useBudgetAlerts(budgetId?: string) {
-  return useQuery({
-    queryKey: budgetKeys.alerts(budgetId),
-    queryFn: async () => {
-      const res = await budgetApi.listAlerts({ budgetId });
-      return res.data.data as Array<{
-        id: string;
-        threshold_pct: number;
-        actual_pct: number;
-        channel: string;
-        fired_at: string;
-        cost_centre_code: string;
-        acknowledged_at: string | null;
-      }>;
+      const res = await budgetApi.listAdditions({ status });
+      return res.data.data as BudgetAdditionRequest[];
     },
   });
 }
 
 // ─── Mutations ────────────────────────────────────────────────
-export function useRequestSupplementary() {
+export function useRequestAddition() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (data: { amount: number; reason: string; costCentreId?: string; fiscalYear?: string }) =>
-      budgetApi.requestSupplementary(data),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['budget'] });
-    },
+    mutationFn: (data: { departmentBudgetId: string; amount: number; reason: string }) =>
+      budgetApi.requestAddition(data),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['budget'] }),
   });
 }
 
-export function useApproveSupplementary() {
+export function useDecideAddition() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: ({ id, action, note }: { id: string; action: 'APPROVE' | 'REJECT'; note?: string }) =>
-      budgetApi.approveSupplementary(id, { action, note }),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['budget'] });
-    },
+      budgetApi.decideAddition(id, { action, note }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['budget'] }),
   });
 }
 
@@ -153,8 +127,6 @@ export function useAdjustBudget() {
   return useMutation({
     mutationFn: ({ id, delta, note }: { id: string; delta: number; note: string }) =>
       budgetApi.adjust(id, { delta, note }),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['budget'] });
-    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['budget'] }),
   });
 }
