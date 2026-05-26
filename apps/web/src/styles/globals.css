@@ -55,6 +55,12 @@
   /* Sidebar */
   --sidebar-bg:        rgba(10, 11, 20, 0.95);
   --sidebar-width:     240px;
+
+  /* Form fields & popovers */
+  --surface-base:      16 17 31;
+  --border-subtle:     255 255 255 / 0.07;
+  --field-bg:          22 24 40;
+  --field-border:      255 255 255 / 0.14;
 }
 
 /* ─── Theme: Corporate Light ────────────────────────────────── */
@@ -94,6 +100,11 @@
 
   --sidebar-bg:        rgba(248, 249, 252, 0.98);
   --sidebar-width:     240px;
+
+  --surface-base:      255 255 255;
+  --border-subtle:     15 23 42 / 0.08;
+  --field-bg:          241 243 248;
+  --field-border:      15 23 42 / 0.16;
 }
 
 /* ─── Theme: Forest Professional ───────────────────────────── */
@@ -133,6 +144,11 @@
 
   --sidebar-bg:        rgba(8, 16, 12, 0.97);
   --sidebar-width:     240px;
+
+  --surface-base:      12 22 16;
+  --border-subtle:     255 255 255 / 0.07;
+  --field-bg:          18 32 22;
+  --field-border:      255 255 255 / 0.12;
 }
 
 /* ─── Theme: Sunset Warm ────────────────────────────────────── */
@@ -172,6 +188,11 @@
 
   --sidebar-bg:        rgba(18, 10, 5, 0.97);
   --sidebar-width:     240px;
+
+  --surface-base:      26 14 7;
+  --border-subtle:     255 255 255 / 0.08;
+  --field-bg:          36 20 10;
+  --field-border:      255 255 255 / 0.15;
 }
 
 /* ─── Theme: Arctic Blue ────────────────────────────────────── */
@@ -211,6 +232,11 @@
 
   --sidebar-bg:        rgba(240, 249, 255, 0.98);
   --sidebar-width:     240px;
+
+  --surface-base:      255 255 255;
+  --border-subtle:     14 165 233 / 0.12;
+  --field-bg:          224 242 254;
+  --field-border:      14 165 233 / 0.24;
 }
 
 /* ─── Base Reset ─────────────────────────────────────────────── */
@@ -272,6 +298,13 @@ body {
     -webkit-backdrop-filter: blur(8px);
     border: 1px solid var(--glass-border);
     border-radius: 0.75rem;
+  }
+
+  /* Form controls — visible on light and dark surfaces */
+  .form-input {
+    background: rgb(var(--field-bg));
+    border: 1px solid rgb(var(--field-border));
+    color: rgb(var(--content-primary));
   }
 
   /* Shimmer Loading */

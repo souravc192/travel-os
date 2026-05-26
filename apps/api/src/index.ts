@@ -6,6 +6,8 @@ import compression from 'compression';
 import cookieParser from 'cookie-parser';
 import morgan from 'morgan';
 import { rateLimit } from 'express-rate-limit';
+import path from 'path';
+import fs from 'fs';
 
 import { logger } from './config/logger';
 import { testDbConnection } from './config/db';
@@ -109,11 +111,41 @@ app.use('/api/v1/travel-requests', travelRequestRoutes);
 app.use('/api/v1/members',         membersRoutes);
 app.use('/api/v1/notifications',   notificationRoutes);
 
+// ─── Serve Frontend Static Files ──────────────────────────────
+const webDistPath = path.resolve(__dirname, '../../web/dist');
+if (fs.existsSync(webDistPath)) {
+  logger.info(`Serving static files from: ${webDistPath}`);
+  app.use(express.static(webDistPath));
+
+  // Any non-API route is served by index.html for React Router to handle
+  app.get('*', (req, res, next) => {
+    if (req.path.startsWith('/api/')) {
+      next();
+      return;
+    }
+    res.sendFile(path.join(webDistPath, 'index.html'), (err) => {
+      if (err) {
+        next();
+      }
+    });
+  });
+} else {
+  logger.warn(`Frontend build directory not found at: ${webDistPath}. Static serving is disabled.`);
+}
+
+// ─── API 404 Fallback ─────────────────────────────────────────
+app.use('/api/*', (_req, res) => {
+  res.status(404).json({
+    success: false,
+    error: { code: 'NOT_FOUND', message: 'The requested API endpoint does not exist.' },
+  });
+});
+
 // ─── 404 Handler ──────────────────────────────────────────────
 app.use((_req, res) => {
   res.status(404).json({
     success: false,
-    error: { code: 'NOT_FOUND', message: 'The requested endpoint does not exist.' },
+    error: { code: 'NOT_FOUND', message: 'The requested resource or endpoint does not exist.' },
   });
 });
 

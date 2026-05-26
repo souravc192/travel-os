@@ -169,6 +169,26 @@ const STATUS_STYLE: Record<string, { label: string; className: string }> = {
   DESK_REJECTED:  { label: 'Rejected',  className: 'badge-danger' },
 };
 
+interface TravelRequestRow {
+  id: string;
+  request_code: string;
+  status: string;
+  traveler_full_name: string;
+  booking_boarding: string | null;
+  booking_destination: string | null;
+  booking_departure_date: string | null;
+}
+
+const TRAVEL_STATUS: Record<string, { label: string; className: string }> = {
+  AUTO_APPROVED: { label: 'Auto-Approved', className: 'badge-success' },
+  PENDING_L1:    { label: 'Pending L1',    className: 'badge-warning' },
+  PENDING_L2:    { label: 'Pending L2',    className: 'badge-warning' },
+  PENDING_L3:    { label: 'Pending L3',    className: 'badge-warning' },
+  APPROVED:      { label: 'Approved',      className: 'badge-success' },
+  REJECTED:      { label: 'Rejected',      className: 'badge-danger' },
+  CANCELLED:     { label: 'Cancelled',     className: 'badge-muted' },
+};
+
 // ─── Generate mock sparkline data ─────────────────────────────
 function mockSparkline(base: number, variance = 0.15) {
   return Array.from({ length: 12 }, (_, i) => ({
@@ -256,7 +276,7 @@ export default function DashboardPage() {
         </div>
 
         <motion.button
-          onClick={() => navigate('/trips/new')}
+          onClick={() => navigate('/travel/new')}
           className="hidden sm:flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-semibold text-white"
           style={{ background: 'rgb(var(--accent))' }}
           whileHover={{ scale: 1.03 }}
@@ -383,7 +403,7 @@ export default function DashboardPage() {
               {isApprover || isAdmin || isDesk ? 'Pending Approvals' : 'My Recent Trips'}
             </h3>
             <button
-              onClick={() => navigate(isApprover ? '/approvals' : '/trips')}
+              onClick={() => navigate(isApprover ? '/approvals' : '/travel/requests')}
               className="flex items-center gap-1 text-xs font-medium transition-colors"
               style={{ color: 'rgb(var(--accent-text))' }}
             >
@@ -405,7 +425,7 @@ export default function DashboardPage() {
               </div>
               <p className="text-sm" style={{ color: 'rgb(var(--content-muted))' }}>No trips yet</p>
               <button
-                onClick={() => navigate('/trips/new')}
+                onClick={() => navigate('/travel/new')}
                 className="text-xs px-3 py-1.5 rounded-lg font-medium"
                 style={{ background: 'rgb(var(--accent-subtle))', color: 'rgb(var(--accent-text))' }}
               >
@@ -414,14 +434,8 @@ export default function DashboardPage() {
             </div>
           ) : (
             <div className="space-y-2.5">
-              {/* Mock trips since backend not wired yet */}
-              {[
-                { id: '1', tripCode: 'TRP-2024-ENG-00042', origin: 'Mumbai', destination: 'Bengaluru', status: 'BOOKED',      departureDate: '2024-02-15', budget: 18000 },
-                { id: '2', tripCode: 'TRP-2024-ENG-00041', origin: 'Delhi',  destination: 'Chennai',   status: 'L1_PENDING',  departureDate: '2024-02-20', budget: 12000 },
-                { id: '3', tripCode: 'TRP-2024-ENG-00040', origin: 'Pune',   destination: 'Hyderabad', status: 'COMPLETED',   departureDate: '2024-02-05', budget: 9500  },
-                { id: '4', tripCode: 'TRP-2024-ENG-00039', origin: 'Delhi',  destination: 'Kolkata',   status: 'DESK_PENDING', departureDate: '2024-02-25', budget: 22000 },
-              ].map((trip, i) => {
-                const st = STATUS_STYLE[trip.status] ?? { label: trip.status, className: 'badge-muted' };
+              {(trips as TravelRequestRow[]).map((trip, i) => {
+                const st = TRAVEL_STATUS[trip.status] ?? { label: trip.status, className: 'badge-muted' };
                 return (
                   <motion.div
                     key={trip.id}
@@ -430,7 +444,7 @@ export default function DashboardPage() {
                     initial={{ opacity: 0, y: 8 }}
                     animate={{ opacity: 1, y: 0 }}
                     transition={{ delay: 0.6 + i * 0.07 }}
-                    onClick={() => navigate(`/trips/${trip.id}`)}
+                    onClick={() => navigate(`/travel/requests/${trip.id}`)}
                     whileHover={{ x: 2 }}
                   >
                     <div className="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0"
@@ -440,18 +454,21 @@ export default function DashboardPage() {
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2">
                         <p className="text-xs font-semibold truncate" style={{ color: 'rgb(var(--content-primary))' }}>
-                          {trip.origin} → {trip.destination}
+                          {trip.booking_boarding || '—'} → {trip.booking_destination || '—'}
                         </p>
                       </div>
                       <p className="text-[10px] font-mono mt-0.5" style={{ color: 'rgb(var(--content-muted))' }}>
-                        {trip.tripCode} · {new Date(trip.departureDate).toLocaleDateString('en-IN', { day: '2-digit', month: 'short' })}
+                        {trip.request_code}
+                        {trip.booking_departure_date && (
+                          <> · {new Date(trip.booking_departure_date).toLocaleDateString('en-IN', { day: '2-digit', month: 'short' })}</>
+                        )}
+                      </p>
+                      <p className="text-[10px] mt-0.5 truncate" style={{ color: 'rgb(var(--content-secondary))' }}>
+                        {trip.traveler_full_name}
                       </p>
                     </div>
                     <div className="flex flex-col items-end gap-1 flex-shrink-0">
                       <span className={st.className}>{st.label}</span>
-                      <span className="text-[10px] font-mono" style={{ color: 'rgb(var(--content-muted))' }}>
-                        ₹{trip.budget.toLocaleString('en-IN')}
-                      </span>
                     </div>
                     <ChevronRight className="w-3.5 h-3.5 flex-shrink-0" style={{ color: 'rgb(var(--content-muted))' }} />
                   </motion.div>
@@ -462,7 +479,7 @@ export default function DashboardPage() {
 
           {/* FAB for mobile */}
           <motion.button
-            onClick={() => navigate('/trips/new')}
+            onClick={() => navigate('/travel/new')}
             className="sm:hidden fixed bottom-6 right-6 w-14 h-14 rounded-2xl flex items-center justify-center shadow-2xl text-white z-30"
             style={{ background: 'rgb(var(--accent))' }}
             whileHover={{ scale: 1.05 }}

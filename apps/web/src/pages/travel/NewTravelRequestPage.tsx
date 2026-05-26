@@ -114,18 +114,14 @@ function Field({ label, hint, error, children }: {
   );
 }
 
-const inputCx = "w-full px-3 py-2.5 rounded-xl text-sm outline-none transition-colors";
-const inputStyle = {
-  background: 'rgb(var(--surface-elevated))',
-  border:     '1px solid rgb(var(--border-subtle))',
-  color:      'rgb(var(--content-primary))',
-};
+const inputCx = "form-input w-full px-3 py-2.5 rounded-xl text-sm outline-none transition-colors focus:ring-2 focus:ring-[rgb(var(--accent)/0.35)]";
 
-function Section({ title, children, icon: Icon }: {
-  title: string; children: React.ReactNode; icon?: React.ElementType;
+function Section({ title, children, icon: Icon, elevated }: {
+  title: string; children: React.ReactNode; icon?: React.ElementType; elevated?: boolean;
 }) {
   return (
-    <motion.section className="glass p-5"
+    <motion.section
+      className={`glass p-5 overflow-visible ${elevated ? 'relative z-50' : 'relative'}`}
       initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.3 }}>
       <h2 className="font-display text-sm font-semibold mb-4 flex items-center gap-2"
         style={{ color: 'rgb(var(--content-primary))' }}>
@@ -200,6 +196,16 @@ export default function NewTravelRequestPage() {
       o.toLowerCase().includes(reasonFilter.toLowerCase())),
     [reasonFilter]
   );
+
+  useEffect(() => {
+    if (!reasonOpen) return;
+    const onPointerDown = (e: MouseEvent) => {
+      const el = (e.target as HTMLElement).closest('[data-reason-dropdown]');
+      if (!el) setReasonOpen(false);
+    };
+    document.addEventListener('mousedown', onPointerDown);
+    return () => document.removeEventListener('mousedown', onPointerDown);
+  }, [reasonOpen]);
 
   const showStayBlock = (f.requestFor && f.reservationType === 'TRAVEL' && f.needsStay) ||
                         f.reservationType === 'STAY' || f.reservationType === 'TRAVEL_AND_STAY';
@@ -294,7 +300,7 @@ export default function NewTravelRequestPage() {
       </div>
 
       {/* ── 1. Header ─────────────────────────────────────────── */}
-      <Section title="Request Header" icon={Clock}>
+      <Section title="Request Header" icon={Clock} elevated={reasonOpen}>
         <Field label="Submitting on someone's behalf?">
           <div className="flex gap-2">
             {[
@@ -336,35 +342,33 @@ export default function NewTravelRequestPage() {
           </Field>
 
           <Field label="Reason of Travel">
-            <div className="relative">
+            <div className="relative" data-reason-dropdown>
               <button type="button" onClick={() => setReasonOpen((o) => !o)}
-                className={`${inputCx} text-left flex items-center justify-between`}
-                style={inputStyle}>
+                className={`${inputCx} text-left flex items-center justify-between`}>
                 <span className={f.reasonOfTravel ? '' : 'opacity-50'}>
                   {f.reasonOfTravel || 'Select a reason'}
                 </span>
                 <ChevronDown className="w-4 h-4 opacity-50" />
               </button>
               {reasonOpen && (
-                <div className="absolute z-20 mt-1 w-full rounded-xl max-h-72 overflow-y-auto"
+                <div
+                  className="absolute z-[100] mt-1 w-full rounded-xl max-h-72 overflow-y-auto"
                   style={{
-                    background: 'rgb(var(--surface-base))',
-                    border: '1px solid rgb(var(--border-subtle))',
-                    boxShadow: '0 10px 30px rgba(0,0,0,0.25)',
-                  }}>
-                  <div className="sticky top-0 p-2"
-                    style={{ background: 'rgb(var(--surface-base))' }}>
+                    background: 'rgb(var(--surface-secondary))',
+                    border: '1px solid rgb(var(--field-border))',
+                    boxShadow: '0 12px 40px rgb(var(--shadow-color) / 0.2)',
+                  }}
+                >
+                  <div className="sticky top-0 p-2 z-10"
+                    style={{ background: 'rgb(var(--surface-secondary))' }}>
                     <div className="relative">
                       <Search className="absolute left-2 top-1/2 -translate-y-1/2 w-3.5 h-3.5"
                         style={{ color: 'rgb(var(--content-muted))' }} />
                       <input value={reasonFilter}
                         onChange={(e) => setReasonFilter(e.target.value)}
                         placeholder="Search…"
-                        className="w-full pl-7 pr-2 py-1.5 rounded-lg text-xs outline-none"
-                        style={{
-                          background: 'rgb(var(--surface-elevated))',
-                          color: 'rgb(var(--content-primary))',
-                        }} />
+                        className="form-input w-full pl-7 pr-2 py-1.5 rounded-lg text-xs outline-none"
+                      />
                     </div>
                   </div>
                   {filteredReasons.map((opt) => (
@@ -390,7 +394,7 @@ export default function NewTravelRequestPage() {
           <Field label="Specify (free text)">
             <input value={f.reasonOfTravelOther}
               onChange={(e) => patch('reasonOfTravelOther', e.target.value)}
-              className={inputCx} style={inputStyle}
+              className={inputCx}
               placeholder="Describe the reason" />
           </Field>
         )}
@@ -403,12 +407,12 @@ export default function NewTravelRequestPage() {
             <input value={f.employeeCode}
               onChange={(e) => patch('employeeCode', e.target.value.toUpperCase())}
               placeholder="e.g. PW0086"
-              className={`${inputCx} font-mono`} style={inputStyle} />
+              className={`${inputCx} font-mono`} />
           </Field>
           {f.submittedOnBehalf && (
             <Field label="Member PWID using this service" hint="Auto-filled from Employee ID">
               <input value={f.employeeCode} readOnly
-                className={`${inputCx} font-mono opacity-80`} style={inputStyle} />
+                className={`${inputCx} font-mono opacity-80`} />
             </Field>
           )}
         </div>
@@ -465,8 +469,7 @@ export default function NewTravelRequestPage() {
           <Field label="Cost Centre (acting on behalf)">
             <input value={f.onBehalfCostCentre}
               onChange={(e) => patch('onBehalfCostCentre', e.target.value)}
-              className={inputCx} style={inputStyle}
-              placeholder="Cost centre code" />
+              className={inputCx}              placeholder="Cost centre code" />
           </Field>
         )}
       </Section>
@@ -519,13 +522,13 @@ export default function NewTravelRequestPage() {
             <Field label="Extension Start Date">
               <input type="date" value={f.extensionStartDate}
                 onChange={(e) => patch('extensionStartDate', e.target.value)}
-                className={inputCx} style={inputStyle} />
+                className={inputCx} />
             </Field>
             <Field label="Initial Request ID (UUID)">
               <input value={f.initialRequestId}
                 onChange={(e) => patch('initialRequestId', e.target.value)}
                 placeholder="Paste linked request UUID"
-                className={`${inputCx} font-mono`} style={inputStyle} />
+                className={`${inputCx} font-mono`} />
             </Field>
           </div>
         )}
@@ -535,7 +538,7 @@ export default function NewTravelRequestPage() {
             <Field label="Reservation">
               <select value={f.reservationType}
                 onChange={(e) => patch('reservationType', e.target.value as FormState['reservationType'])}
-                className={inputCx} style={inputStyle}>
+                className={inputCx}>
                 <option value="TRAVEL">Travel</option>
                 <option value="STAY">Stay</option>
                 <option value="TRAVEL_AND_STAY">Travel & Stay</option>
@@ -568,23 +571,23 @@ export default function NewTravelRequestPage() {
             <Field label="Number of Students">
               <input type="number" value={f.studentDetails.noOfStudents}
                 onChange={(e) => patch('studentDetails', { ...f.studentDetails, noOfStudents: e.target.value })}
-                className={inputCx} style={inputStyle} />
+                className={inputCx} />
             </Field>
             <Field label="Student Sheet Link">
               <input value={f.studentDetails.sheetLink}
                 onChange={(e) => patch('studentDetails', { ...f.studentDetails, sheetLink: e.target.value })}
-                placeholder="https://..." className={inputCx} style={inputStyle} />
+                placeholder="https://..." className={inputCx} />
             </Field>
           </div>
           <Field label="Reason">
             <textarea rows={2} value={f.studentDetails.reason}
               onChange={(e) => patch('studentDetails', { ...f.studentDetails, reason: e.target.value })}
-              className={inputCx} style={inputStyle} />
+              className={inputCx} />
           </Field>
           <Field label="Remarks">
             <textarea rows={2} value={f.studentDetails.remarks}
               onChange={(e) => patch('studentDetails', { ...f.studentDetails, remarks: e.target.value })}
-              className={inputCx} style={inputStyle} />
+              className={inputCx} />
           </Field>
         </Section>
       )}
@@ -595,28 +598,28 @@ export default function NewTravelRequestPage() {
             <Field label="Name of Guest">
               <input value={f.guestDetails.name}
                 onChange={(e) => patch('guestDetails', { ...f.guestDetails, name: e.target.value })}
-                className={inputCx} style={inputStyle} />
+                className={inputCx} />
             </Field>
             <Field label="Hosting Department">
               <input value={f.guestDetails.hostingDepartment}
                 onChange={(e) => patch('guestDetails', { ...f.guestDetails, hostingDepartment: e.target.value })}
-                className={inputCx} style={inputStyle} />
+                className={inputCx} />
             </Field>
             <Field label="Email">
               <input type="email" value={f.guestDetails.emailId}
                 onChange={(e) => patch('guestDetails', { ...f.guestDetails, emailId: e.target.value })}
-                className={inputCx} style={inputStyle} />
+                className={inputCx} />
             </Field>
             <Field label="Purpose">
               <input value={f.guestDetails.purpose}
                 onChange={(e) => patch('guestDetails', { ...f.guestDetails, purpose: e.target.value })}
-                className={inputCx} style={inputStyle} />
+                className={inputCx} />
             </Field>
           </div>
           <Field label="Remarks">
             <textarea rows={2} value={f.guestDetails.remarks}
               onChange={(e) => patch('guestDetails', { ...f.guestDetails, remarks: e.target.value })}
-              className={inputCx} style={inputStyle} />
+              className={inputCx} />
           </Field>
         </Section>
       )}
@@ -627,28 +630,28 @@ export default function NewTravelRequestPage() {
             <Field label="Employee Name">
               <input value={f.newMemberDetails.employeeName}
                 onChange={(e) => patch('newMemberDetails', { ...f.newMemberDetails, employeeName: e.target.value })}
-                className={inputCx} style={inputStyle} />
+                className={inputCx} />
             </Field>
             <Field label="Candidate ID">
               <input value={f.newMemberDetails.candidateId}
                 onChange={(e) => patch('newMemberDetails', { ...f.newMemberDetails, candidateId: e.target.value })}
-                className={inputCx} style={inputStyle} />
+                className={inputCx} />
             </Field>
             <Field label="Email">
               <input type="email" value={f.newMemberDetails.emailId}
                 onChange={(e) => patch('newMemberDetails', { ...f.newMemberDetails, emailId: e.target.value })}
-                className={inputCx} style={inputStyle} />
+                className={inputCx} />
             </Field>
             <Field label="Joining Department">
               <input value={f.newMemberDetails.joiningDepartment}
                 onChange={(e) => patch('newMemberDetails', { ...f.newMemberDetails, joiningDepartment: e.target.value })}
-                className={inputCx} style={inputStyle} />
+                className={inputCx} />
             </Field>
           </div>
           <Field label="Remarks">
             <textarea rows={2} value={f.newMemberDetails.remarks}
               onChange={(e) => patch('newMemberDetails', { ...f.newMemberDetails, remarks: e.target.value })}
-              className={inputCx} style={inputStyle} />
+              className={inputCx} />
           </Field>
         </Section>
       )}
@@ -659,28 +662,28 @@ export default function NewTravelRequestPage() {
             <Field label="Event Name">
               <input value={f.eventDetails.eventName}
                 onChange={(e) => patch('eventDetails', { ...f.eventDetails, eventName: e.target.value })}
-                className={inputCx} style={inputStyle} />
+                className={inputCx} />
             </Field>
             <Field label="Number of Members">
               <input type="number" value={f.eventDetails.noOfMembers}
                 onChange={(e) => patch('eventDetails', { ...f.eventDetails, noOfMembers: e.target.value })}
-                className={inputCx} style={inputStyle} />
+                className={inputCx} />
             </Field>
           </div>
           <Field label="Sheet Link">
             <input value={f.eventDetails.sheetLink}
               onChange={(e) => patch('eventDetails', { ...f.eventDetails, sheetLink: e.target.value })}
-              placeholder="https://..." className={inputCx} style={inputStyle} />
+              placeholder="https://..." className={inputCx} />
           </Field>
           <Field label="Reason">
             <textarea rows={2} value={f.eventDetails.reason}
               onChange={(e) => patch('eventDetails', { ...f.eventDetails, reason: e.target.value })}
-              className={inputCx} style={inputStyle} />
+              className={inputCx} />
           </Field>
           <Field label="Remarks">
             <textarea rows={2} value={f.eventDetails.remarks}
               onChange={(e) => patch('eventDetails', { ...f.eventDetails, remarks: e.target.value })}
-              className={inputCx} style={inputStyle} />
+              className={inputCx} />
           </Field>
         </Section>
       )}
@@ -692,27 +695,27 @@ export default function NewTravelRequestPage() {
             <Field label="Name">
               <input value={f.travelerDetails.name}
                 onChange={(e) => patch('travelerDetails', { ...f.travelerDetails, name: e.target.value })}
-                className={inputCx} style={inputStyle} />
+                className={inputCx} />
             </Field>
             <Field label="Employee/ID Reference">
               <input value={f.travelerDetails.employeeId}
                 onChange={(e) => patch('travelerDetails', { ...f.travelerDetails, employeeId: e.target.value })}
-                className={inputCx} style={inputStyle} />
+                className={inputCx} />
             </Field>
             <Field label="Contact No.">
               <input value={f.travelerDetails.contactNo}
                 onChange={(e) => patch('travelerDetails', { ...f.travelerDetails, contactNo: e.target.value })}
-                className={inputCx} style={inputStyle} />
+                className={inputCx} />
             </Field>
             <Field label="Email">
               <input type="email" value={f.travelerDetails.emailId}
                 onChange={(e) => patch('travelerDetails', { ...f.travelerDetails, emailId: e.target.value })}
-                className={inputCx} style={inputStyle} />
+                className={inputCx} />
             </Field>
             <Field label="Gender">
               <select value={f.travelerDetails.gender}
                 onChange={(e) => patch('travelerDetails', { ...f.travelerDetails, gender: e.target.value })}
-                className={inputCx} style={inputStyle}>
+                className={inputCx}>
                 <option value="">Select</option>
                 <option>Male</option>
                 <option>Female</option>
@@ -722,7 +725,7 @@ export default function NewTravelRequestPage() {
             <Field label="Date of Birth">
               <input type="date" value={f.travelerDetails.dob}
                 onChange={(e) => patch('travelerDetails', { ...f.travelerDetails, dob: e.target.value })}
-                className={inputCx} style={inputStyle} />
+                className={inputCx} />
             </Field>
           </div>
         </Section>
@@ -736,40 +739,40 @@ export default function NewTravelRequestPage() {
               <input value={f.bookingBoarding}
                 onChange={(e) => patch('bookingBoarding', e.target.value)}
                 placeholder="e.g. Delhi"
-                className={inputCx} style={inputStyle} />
+                className={inputCx} />
             </Field>
             <Field label="Destination">
               <input value={f.bookingDestination}
                 onChange={(e) => patch('bookingDestination', e.target.value)}
                 placeholder="e.g. Mumbai"
-                className={inputCx} style={inputStyle} />
+                className={inputCx} />
             </Field>
             <Field label="Departure Date">
               <input type="date" value={f.bookingDepartureDate}
                 onChange={(e) => patch('bookingDepartureDate', e.target.value)}
-                className={inputCx} style={inputStyle} />
+                className={inputCx} />
             </Field>
             <Field label="Preferred Time">
               <input value={f.bookingPreferredTime}
                 onChange={(e) => patch('bookingPreferredTime', e.target.value)}
                 placeholder="e.g. After 7 PM"
-                className={inputCx} style={inputStyle} />
+                className={inputCx} />
             </Field>
           </div>
           <Field label="Visiting Reason">
             <input value={f.bookingVisitingReason}
               onChange={(e) => patch('bookingVisitingReason', e.target.value)}
-              className={inputCx} style={inputStyle} />
+              className={inputCx} />
           </Field>
           <Field label="Purpose">
             <textarea rows={2} value={f.bookingPurpose}
               onChange={(e) => patch('bookingPurpose', e.target.value)}
-              className={inputCx} style={inputStyle} />
+              className={inputCx} />
           </Field>
           <Field label="Remarks">
             <textarea rows={2} value={f.bookingRemarks}
               onChange={(e) => patch('bookingRemarks', e.target.value)}
-              className={inputCx} style={inputStyle} />
+              className={inputCx} />
           </Field>
         </Section>
       )}
@@ -781,28 +784,28 @@ export default function NewTravelRequestPage() {
             <Field label="Visiting Center">
               <input value={f.stayVisitingCenter}
                 onChange={(e) => patch('stayVisitingCenter', e.target.value)}
-                className={inputCx} style={inputStyle} />
+                className={inputCx} />
             </Field>
             <Field label="Location">
               <input value={f.stayLocation}
                 onChange={(e) => patch('stayLocation', e.target.value)}
-                className={inputCx} style={inputStyle} />
+                className={inputCx} />
             </Field>
             <Field label="Check-In Date">
               <input type="date" value={f.stayCheckIn}
                 onChange={(e) => patch('stayCheckIn', e.target.value)}
-                className={inputCx} style={inputStyle} />
+                className={inputCx} />
             </Field>
             <Field label="Check-Out Date">
               <input type="date" value={f.stayCheckOut}
                 onChange={(e) => patch('stayCheckOut', e.target.value)}
-                className={inputCx} style={inputStyle} />
+                className={inputCx} />
             </Field>
           </div>
           <Field label="Remarks">
             <textarea rows={2} value={f.stayRemarks}
               onChange={(e) => patch('stayRemarks', e.target.value)}
-              className={inputCx} style={inputStyle} />
+              className={inputCx} />
           </Field>
         </Section>
       )}
