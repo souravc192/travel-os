@@ -26,15 +26,15 @@ INSERT INTO cost_centres (id, code, name, department_id) VALUES
 -- ─── Users (password: Admin@123 bcrypt hash) ──────────────────
 -- All passwords: Travel@123 (bcrypt $2b$12$...)
 -- Pre-generated hash for 'Travel@123':
--- $2b$12$LQv3c1yqBWVHxkd0LHAkCOYz6TtxMQJqhN8/LewFhA1GsG5NzFfPa
+-- $2b$12$s.GxiaFLkhSUMt0/9eOqSOn3jEIz1prdJYtsm7Ut8jkjcahIE79Xm
 
 INSERT INTO users (id, email, password_hash, role, theme) VALUES
-  ('aaaaaaaa-0000-0000-0000-000000000001', 'superadmin@company.com',  '$2b$12$LQv3c1yqBWVHxkd0LHAkCOYz6TtxMQJqhN8/LewFhA1GsG5NzFfPa', 'SUPER_ADMIN',   'deep-space-dark'),
-  ('aaaaaaaa-0000-0000-0000-000000000002', 'travel.desk@company.com', '$2b$12$LQv3c1yqBWVHxkd0LHAkCOYz6TtxMQJqhN8/LewFhA1GsG5NzFfPa', 'TRAVEL_DESK',   'corporate-light'),
-  ('aaaaaaaa-0000-0000-0000-000000000003', 'finance@company.com',     '$2b$12$LQv3c1yqBWVHxkd0LHAkCOYz6TtxMQJqhN8/LewFhA1GsG5NzFfPa', 'FINANCE_ADMIN', 'arctic-blue'),
-  ('aaaaaaaa-0000-0000-0000-000000000004', 'hod.eng@company.com',     '$2b$12$LQv3c1yqBWVHxkd0LHAkCOYz6TtxMQJqhN8/LewFhA1GsG5NzFfPa', 'L2_APPROVER',   'deep-space-dark'),
-  ('aaaaaaaa-0000-0000-0000-000000000005', 'manager.eng@company.com', '$2b$12$LQv3c1yqBWVHxkd0LHAkCOYz6TtxMQJqhN8/LewFhA1GsG5NzFfPa', 'L1_APPROVER',   'corporate-light'),
-  ('aaaaaaaa-0000-0000-0000-000000000006', 'emp.eng@company.com',     '$2b$12$LQv3c1yqBWVHxkd0LHAkCOYz6TtxMQJqhN8/LewFhA1GsG5NzFfPa', 'EMPLOYEE',      'deep-space-dark');
+  ('aaaaaaaa-0000-0000-0000-000000000001', 'superadmin@company.com',  '$2b$12$s.GxiaFLkhSUMt0/9eOqSOn3jEIz1prdJYtsm7Ut8jkjcahIE79Xm', 'SUPER_ADMIN',   'deep-space-dark'),
+  ('aaaaaaaa-0000-0000-0000-000000000002', 'travel.desk@company.com', '$2b$12$s.GxiaFLkhSUMt0/9eOqSOn3jEIz1prdJYtsm7Ut8jkjcahIE79Xm', 'TRAVEL_DESK',   'corporate-light'),
+  ('aaaaaaaa-0000-0000-0000-000000000003', 'finance@company.com',     '$2b$12$s.GxiaFLkhSUMt0/9eOqSOn3jEIz1prdJYtsm7Ut8jkjcahIE79Xm', 'FINANCE_ADMIN', 'arctic-blue'),
+  ('aaaaaaaa-0000-0000-0000-000000000004', 'hod.eng@company.com',     '$2b$12$s.GxiaFLkhSUMt0/9eOqSOn3jEIz1prdJYtsm7Ut8jkjcahIE79Xm', 'L2_APPROVER',   'deep-space-dark'),
+  ('aaaaaaaa-0000-0000-0000-000000000005', 'manager.eng@company.com', '$2b$12$s.GxiaFLkhSUMt0/9eOqSOn3jEIz1prdJYtsm7Ut8jkjcahIE79Xm', 'L1_APPROVER',   'corporate-light'),
+  ('aaaaaaaa-0000-0000-0000-000000000006', 'emp.eng@company.com',     '$2b$12$s.GxiaFLkhSUMt0/9eOqSOn3jEIz1prdJYtsm7Ut8jkjcahIE79Xm', 'EMPLOYEE',      'deep-space-dark');
 
 -- ─── Employees ────────────────────────────────────────────────
 INSERT INTO employees (id, user_id, employee_code, name, designation, department_id, cost_centre_id, grade_level, onboarding_complete) VALUES

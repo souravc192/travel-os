@@ -73,10 +73,16 @@ export default function LoginPage() {
       navigate(requiresOnboarding ? '/onboarding' : '/dashboard', { replace: true });
     } catch (err: unknown) {
       const axiosErr = err as AxiosError<{ error: { message: string } }>;
-      setError(
-        axiosErr.response?.data?.error?.message ||
-        'Unable to sign in. Please check your credentials.'
-      );
+      if (!axiosErr.response) {
+        setError(
+          'Cannot reach the API server. Start it with npm run dev (port 4000) and try again.'
+        );
+      } else {
+        setError(
+          axiosErr.response.data?.error?.message ||
+          'Unable to sign in. Please check your credentials.'
+        );
+      }
     } finally {
       setLoading(false);
     }

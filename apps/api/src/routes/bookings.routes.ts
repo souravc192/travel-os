@@ -12,7 +12,8 @@ const upload = multer({
   limits:  { fileSize: 25 * 1024 * 1024 },
   fileFilter: (_req, file, cb) => {
     const ok = /\.(pdf|png|jpe?g|webp)$/i.test(file.originalname);
-    cb(ok ? null : new Error('Invoice must be PDF / JPG / PNG / WEBP.'), ok);
+    if (ok) cb(null, true);
+    else cb(new Error('Invoice must be PDF / JPG / PNG / WEBP.') as any, false);
   },
 });
 

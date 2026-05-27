@@ -14,7 +14,7 @@ INSERT INTO users (id, email, password_hash, role, theme, is_active)
 VALUES (
   'aaaaaaaa-0000-0000-0000-000000000099',
   'sourav.1@pw.live',
-  '$2b$12$LQv3c1yqBWVHxkd0LHAkCOYz6TtxMQJqhN8/LewFhA1GsG5NzFfPa',
+  '$2b$12$s.GxiaFLkhSUMt0/9eOqSOn3jEIz1prdJYtsm7Ut8jkjcahIE79Xm',
   'OWNER',
   'deep-space-dark',
   true

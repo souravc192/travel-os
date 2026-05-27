@@ -12,7 +12,8 @@ const upload = multer({
   fileFilter: (_req, file, cb) => {
     const ok = /\.pdf$/i.test(file.originalname) ||
                file.mimetype === 'application/pdf';
-    cb(ok ? null : new Error('Only PDF files are accepted.'), ok);
+    if (ok) cb(null, true);
+    else cb(new Error('Only PDF files are accepted.') as any, false);
   },
 });
 

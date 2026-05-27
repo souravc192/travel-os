@@ -68,14 +68,21 @@ class LocalStorage implements FileStorage {
 // ─── S3 driver (stub — flip later) ───────────────────────────
 // To enable: set STORAGE_DRIVER=s3 and STORAGE_S3_BUCKET / region / creds.
 class S3Storage implements FileStorage {
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  async put(_folder: string, _originalFilename: string, _buf: Buffer) {
+  async put(
+    _folder: string,
+    _originalFilename: string,
+    _buf: Buffer
+  ): Promise<{ key: string; filename: string; bytes: number }> {
     throw new Error('S3 storage driver is not implemented yet. Use STORAGE_DRIVER=local.');
   }
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  async read(_key: string) { throw new Error('S3 storage driver is not implemented yet.'); }
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  async remove(_key: string) { throw new Error('S3 storage driver is not implemented yet.'); }
+
+  async read(_key: string): Promise<{ stream: Readable; size: number }> {
+    throw new Error('S3 storage driver is not implemented yet.');
+  }
+
+  async remove(_key: string): Promise<void> {
+    throw new Error('S3 storage driver is not implemented yet.');
+  }
 }
 
 // ─── Factory ──────────────────────────────────────────────────
