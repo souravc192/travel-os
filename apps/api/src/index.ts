@@ -12,6 +12,7 @@ import fs from 'fs';
 import { logger } from './config/logger';
 import { testDbConnection } from './config/db';
 import { testRedisConnection } from './config/redis';
+import { initLocalStorage, localUploadDir } from './config/storage';
 import { errorHandler } from './middleware/error.middleware';
 import { requestContext } from './middleware/request-context.middleware';
 
@@ -24,6 +25,7 @@ import budgetRoutes from './routes/budget.routes';
 import travelRequestRoutes from './routes/travel-requests.routes';
 import membersRoutes from './routes/members.routes';
 import notificationRoutes from './routes/notifications.routes';
+import storageRoutes from './routes/storage.routes';
 
 const app = express();
 const PORT = process.env.PORT || 4000;
@@ -110,6 +112,10 @@ app.use('/api/v1/budget',          budgetRoutes);
 app.use('/api/v1/travel-requests', travelRequestRoutes);
 app.use('/api/v1/members',         membersRoutes);
 app.use('/api/v1/notifications',   notificationRoutes);
+app.use('/api/v1/storage',         storageRoutes);
+
+// ─── Persistent uploads (Railway volume → STORAGE_LOCAL_DIR) ──
+app.use('/uploads', express.static(localUploadDir));
 
 // ─── Serve Frontend Static Files ──────────────────────────────
 const webDistPath = path.resolve(__dirname, '../../web/dist');
@@ -155,6 +161,9 @@ app.use(errorHandler);
 // ─── Bootstrap ────────────────────────────────────────────────
 async function bootstrap() {
   try {
+    initLocalStorage();
+    logger.info(`Using storage dir: ${localUploadDir}`);
+
     await testDbConnection();
     logger.info('✅ PostgreSQL connection established');
 

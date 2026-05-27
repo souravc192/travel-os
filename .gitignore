@@ -18,6 +18,9 @@ packages/shared-types/dist/
 # Keep .env.example files:
 !.env.example
 
+# ── Local uploads (STORAGE_LOCAL_DIR) ─────────────────────────
+uploads/
+
 # ── Logs ──────────────────────────────────────────────────────
 logs/
 *.log
