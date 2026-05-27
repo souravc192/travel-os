@@ -8,6 +8,7 @@ import {
 import { travelRequestApi } from '../../lib/api';
 import { useAuthStore } from '../../store/auth.store';
 import { UserRole } from '@travel-os/shared-types';
+import BookingsPanel from './components/BookingsPanel';
 
 interface Approval {
   id: string; level: number;
@@ -368,6 +369,15 @@ export default function TravelRequestDetailPage() {
           </div>
         </Section>
       ))}
+
+      {/* ── Bookings panel (Phase 4) ─────────────────────────── */}
+      {['APPROVED', 'AUTO_APPROVED'].includes(data.status) && (
+        <BookingsPanel requestId={data.id} canEdit={
+          user?.role === UserRole.TRAVEL_TEAM ||
+          user?.role === UserRole.ADMIN ||
+          user?.role === UserRole.OWNER
+        } />
+      )}
 
       {/* ── Action bar ───────────────────────────────────────── */}
       {(canIDecide || canCancel) && (

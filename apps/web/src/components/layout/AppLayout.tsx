@@ -4,7 +4,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import {
   LayoutDashboard, Plane, CheckSquare, Building2, Receipt,
   BarChart3, Users, Settings, Bell, Search, LogOut, ChevronRight,
-  Wallet, MapPin, Package, Menu, X, Sparkles, Moon, Sun
+  Wallet, MapPin, Package, Menu, X, Sparkles, Moon, Sun, BookOpen,
 } from 'lucide-react';
 import { useAuthStore } from '../../store/auth.store';
 import { UserRole, AppTheme } from '@travel-os/shared-types';
@@ -24,8 +24,10 @@ function getNavItems(role: UserRole) {
     { path: '/vendors',         label: 'Vendors',       icon: Building2,       roles: [UserRole.TRAVEL_TEAM, UserRole.OWNER, UserRole.ADMIN] },
     { path: '/invoices',        label: 'Invoices',      icon: Receipt,         roles: [UserRole.ADMIN, UserRole.OWNER] },
     { path: '/budget',          label: 'Budget',        icon: Wallet,          roles: ['ALL'] },
+    { path: '/policy',          label: 'Policy',        icon: BookOpen,        roles: ['ALL'] },
     { path: '/analytics',       label: 'Analytics',     icon: BarChart3,       roles: [UserRole.ADMIN, UserRole.OWNER, UserRole.TRAVEL_TEAM] },
     { path: '/admin/members',   label: 'Members',       icon: Users,           roles: [UserRole.ADMIN, UserRole.OWNER] },
+    { path: '/admin/policies',  label: 'Manage Policy', icon: BookOpen,        roles: [UserRole.ADMIN, UserRole.OWNER] },
     { path: '/users',           label: 'Users',         icon: Users,           roles: [UserRole.OWNER] },
     { path: '/settings',        label: 'Settings',      icon: Settings,        roles: [UserRole.OWNER] },
   ];

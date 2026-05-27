@@ -11,6 +11,8 @@
     "build": "npm run build -w packages/shared-types && npm run build -w apps/api && npm run build -w apps/web",
     "db:migrate": "npm run migrate -w apps/api",
     "db:seed": "npm run seed -w apps/api",
+    "db:migrate:phase4": "npm run migrate:phase4 -w apps/api",
+    "db:migrate:all": "npm run migrate:all -w apps/api",
     "type-check": "tsc --noEmit -w packages/shared-types && tsc --noEmit -w apps/api && tsc --noEmit -w apps/web"
   },
   "devDependencies": {

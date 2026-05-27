@@ -151,6 +151,48 @@ export const travelRequestApi = {
     api.get('/travel-requests/pending-approvals', { params }),
 };
 
+export const bookingApi = {
+  list:    (params?: Record<string, unknown>) => api.get('/bookings', { params }),
+  byRequest: (requestId: string) => api.get(`/bookings/by-request/${requestId}`),
+  get:     (id: string) => api.get(`/bookings/${id}`),
+  create:  (data: unknown) => api.post('/bookings', data),
+  update:  (id: string, data: unknown) => api.patch(`/bookings/${id}`, data),
+  confirm: (id: string) => api.post(`/bookings/${id}/confirm`),
+  cancel:  (id: string, data: { cancellationFee: number; reason: string }) =>
+    api.post(`/bookings/${id}/cancel`, data),
+  reschedule: (id: string, data: { note?: string }) =>
+    api.post(`/bookings/${id}/reschedule`, data),
+  uploadInvoice: (id: string, file: File) => {
+    const fd = new FormData();
+    fd.append('file', file);
+    return api.post(`/bookings/${id}/invoice`, fd, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    });
+  },
+  invoiceUrl: (id: string) => `${BASE_URL}/bookings/${id}/invoice`,
+};
+
+export const policyApi = {
+  list:           () => api.get('/policies'),
+  get:            (id: string) => api.get(`/policies/${id}`),
+  create:         (data: { category: string; title: string; description?: string }) =>
+    api.post('/policies', data),
+  update:         (id: string, data: { category?: string; title?: string; description?: string; isActive?: boolean }) =>
+    api.patch(`/policies/${id}`, data),
+  listVersions:   (id: string) => api.get(`/policies/${id}/versions`),
+  getVersion:     (versionId: string) => api.get(`/policies/versions/${versionId}`),
+  uploadVersion:  (id: string, file: File) => {
+    const fd = new FormData();
+    fd.append('file', file);
+    return api.post(`/policies/${id}/versions`, fd, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    });
+  },
+  publishVersion: (versionId: string) => api.post(`/policies/versions/${versionId}/publish`),
+  deleteVersion:  (versionId: string) => api.delete(`/policies/versions/${versionId}`),
+  pdfUrl:         (versionId: string) => `${BASE_URL}/policies/versions/${versionId}/pdf`,
+};
+
 export const notificationApi = {
   list:   (params?: { unreadOnly?: boolean }) => api.get('/notifications', { params }),
   markRead:    (id: string) => api.patch(`/notifications/${id}/read`),

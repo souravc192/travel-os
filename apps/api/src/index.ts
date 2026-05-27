@@ -26,6 +26,8 @@ import travelRequestRoutes from './routes/travel-requests.routes';
 import membersRoutes from './routes/members.routes';
 import notificationRoutes from './routes/notifications.routes';
 import storageRoutes from './routes/storage.routes';
+import bookingsRoutes from './routes/bookings.routes';
+import policiesRoutes from './routes/policies.routes';
 
 const app = express();
 const PORT = process.env.PORT || 4000;
@@ -113,6 +115,8 @@ app.use('/api/v1/travel-requests', travelRequestRoutes);
 app.use('/api/v1/members',         membersRoutes);
 app.use('/api/v1/notifications',   notificationRoutes);
 app.use('/api/v1/storage',         storageRoutes);
+app.use('/api/v1/bookings',        bookingsRoutes);
+app.use('/api/v1/policies',        policiesRoutes);
 
 // ─── Persistent uploads (Railway volume → STORAGE_LOCAL_DIR) ──
 app.use('/uploads', express.static(localUploadDir));

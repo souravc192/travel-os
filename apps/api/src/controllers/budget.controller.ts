@@ -137,12 +137,18 @@ export async function getHistory(req: Request, res: Response, next: NextFunction
   try {
     const limit = Math.min(200, Math.max(1, parseInt((req.query.limit as string) ?? '50', 10)));
     const r = await db.query(
-      `SELECT h.id, h.action, h.amount, h.balance_after, h.note, h.travel_request_id, h.created_at,
-              u.email AS actor_email, e.name AS actor_name, tr.request_code
+      `SELECT h.id, h.action, h.amount, h.balance_after, h.note,
+              h.travel_request_id, h.booking_id, h.created_at,
+              u.email AS actor_email, e.name AS actor_name,
+              tr.request_code,
+              b.vendor_name AS booking_vendor,
+              b.booking_type AS booking_type,
+              b.booking_status AS booking_status
          FROM department_budget_history h
-         LEFT JOIN users u     ON u.id = h.actor_id
-         LEFT JOIN employees e ON e.user_id = u.id
+         LEFT JOIN users u            ON u.id  = h.actor_id
+         LEFT JOIN employees e        ON e.user_id = u.id
          LEFT JOIN travel_requests tr ON tr.id = h.travel_request_id
+         LEFT JOIN bookings b         ON b.id  = h.booking_id
          WHERE h.department_budget_id = $1
          ORDER BY h.created_at DESC
          LIMIT $2`,

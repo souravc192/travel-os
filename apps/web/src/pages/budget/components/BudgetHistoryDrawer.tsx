@@ -1,6 +1,6 @@
 import { motion, AnimatePresence } from 'framer-motion';
 import {
-  X, Plus, Minus, ArrowDownRight, Sparkles, Plane, Clock,
+  X, Plus, Minus, ArrowDownRight, ArrowUpLeft, Sparkles, Plane, Package, Clock,
 } from 'lucide-react';
 import { useBudgetHistory } from '../../../hooks/useBudget';
 
@@ -11,11 +11,12 @@ interface Props {
   onClose: () => void;
 }
 
-const ACTION_META: Record<string, { icon: React.ElementType; color: string; label: string }> = {
-  ALLOCATE:   { icon: Plus,           color: 'var(--status-success)', label: 'Allocated'    },
-  SUPPLEMENT: { icon: Sparkles,       color: 'var(--status-info)',    label: 'Supplemented' },
-  CONSUME:    { icon: ArrowDownRight, color: 'var(--status-danger)',  label: 'Consumed'     },
-  ADJUST:     { icon: Minus,          color: 'var(--status-warning)', label: 'Adjusted'     },
+const ACTION_META: Record<string, { icon: React.ElementType; color: string; label: string; sign: '+' | '-' }> = {
+  ALLOCATE:   { icon: Plus,           color: 'var(--status-success)', label: 'Allocated',    sign: '+' },
+  SUPPLEMENT: { icon: Sparkles,       color: 'var(--status-info)',    label: 'Added',        sign: '+' },
+  CONSUME:    { icon: ArrowDownRight, color: 'var(--status-danger)',  label: 'Consumed',     sign: '-' },
+  REFUND:     { icon: ArrowUpLeft,    color: 'var(--status-success)', label: 'Refunded',     sign: '+' },
+  ADJUST:     { icon: Minus,          color: 'var(--status-warning)', label: 'Adjusted',     sign: '+' },
 };
 
 function inr(n: number): string {
@@ -122,6 +123,17 @@ export default function BudgetHistoryDrawer({ open, budgetId, title, onClose }: 
                                   {entry.request_code}
                                 </p>
                               )}
+                              {entry.booking_vendor && (
+                                <p className="text-[11px] mt-1 inline-flex items-center gap-1 px-1.5 py-0.5 rounded"
+                                  style={{
+                                    background: 'rgb(var(--surface-base))',
+                                    color: 'rgb(var(--content-primary))',
+                                  }}>
+                                  <Package className="w-3 h-3" />
+                                  {entry.booking_vendor}
+                                  <span className="opacity-60">· {entry.booking_type}</span>
+                                </p>
+                              )}
                               {entry.note && (
                                 <p className="text-[11px] mt-1"
                                   style={{ color: 'rgb(var(--content-secondary))' }}>
@@ -140,8 +152,7 @@ export default function BudgetHistoryDrawer({ open, budgetId, title, onClose }: 
                             <div className="text-right flex-shrink-0">
                               <p className="font-mono text-sm font-bold"
                                 style={{ color: `rgb(${meta.color})` }}>
-                                {entry.action === 'CONSUME' ? '-' : '+'}
-                                {inr(Math.abs(Number(entry.amount)))}
+                                {meta.sign}{inr(Math.abs(Number(entry.amount)))}
                               </p>
                               <p className="text-[10px] font-mono mt-0.5"
                                 style={{ color: 'rgb(var(--content-muted))' }}>

@@ -69,6 +69,49 @@ export const REASON_OF_TRAVEL_OPTIONS = [
 
 export type ReasonOfTravel = (typeof REASON_OF_TRAVEL_OPTIONS)[number];
 
+// ─── Phase 4 — Booking enums ─────────────────────────────────
+export enum BookingType {
+  FLIGHT = 'FLIGHT',
+  TRAIN  = 'TRAIN',
+  BUS    = 'BUS',
+  CAB    = 'CAB',
+  HOTEL  = 'HOTEL',
+  OTHER  = 'OTHER',
+}
+
+export enum BookingStatus {
+  PENDING     = 'PENDING',
+  CONFIRMED   = 'CONFIRMED',
+  CANCELLED   = 'CANCELLED',
+  RESCHEDULED = 'RESCHEDULED',
+}
+
+export interface BookingRow {
+  id: string;
+  travelRequestId: string;
+  bookingType: BookingType;
+  bookingStatus: BookingStatus;
+  vendorName: string;
+  amount: number;
+  currency: string;
+  bookingReference: string | null;
+  bookingDate: string;
+  departureAt: string | null;
+  returnAt: string | null;
+  checkInDate: string | null;
+  checkOutDate: string | null;
+  invoicePath: string | null;
+  invoiceOriginalFilename: string | null;
+  invoiceUploadedAt: string | null;
+  notes: string | null;
+  cancellationFee: number;
+  cancelledAt: string | null;
+  cancellationReason: string | null;
+  consumedAmount: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
 export enum GradeLevel {
   L1 = 'L1', // Junior
   L2 = 'L2',

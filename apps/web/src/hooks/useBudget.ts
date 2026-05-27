@@ -16,12 +16,16 @@ export interface BudgetSummary {
 
 export interface BudgetHistoryEntry {
   id: string;
-  action: 'ALLOCATE' | 'CONSUME' | 'SUPPLEMENT' | 'ADJUST';
+  action: 'ALLOCATE' | 'CONSUME' | 'SUPPLEMENT' | 'ADJUST' | 'REFUND';
   amount: number;
   balance_after: number;
   note: string | null;
   travel_request_id: string | null;
   request_code: string | null;
+  booking_id: string | null;
+  booking_vendor: string | null;
+  booking_type: string | null;
+  booking_status: string | null;
   created_at: string;
   actor_email: string | null;
   actor_name: string | null;

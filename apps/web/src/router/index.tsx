@@ -16,6 +16,10 @@ const MyTravelRequestsPage    = lazy(() => import('../pages/travel/MyTravelReque
 const TravelRequestDetailPage = lazy(() => import('../pages/travel/TravelRequestDetailPage'));
 const ApprovalsInboxPage      = lazy(() => import('../pages/approvals/ApprovalsInboxPage'));
 const MembersAdminPage        = lazy(() => import('../pages/admin/MembersAdminPage'));
+const BookingsListPage        = lazy(() => import('../pages/bookings/BookingsListPage'));
+const PolicyListPage          = lazy(() => import('../pages/policy/PolicyListPage'));
+const PolicyDetailPage        = lazy(() => import('../pages/policy/PolicyDetailPage'));
+const PolicyAdminPage         = lazy(() => import('../pages/admin/PolicyAdminPage'));
 const NotFoundPage            = lazy(() => import('../pages/NotFoundPage'));
 
 // ─── Auth Initializer (runs on every app load) ────────────────
@@ -134,22 +138,27 @@ const router = createBrowserRouter([
                 ],
               },
 
-              // Travel Team routes
+              // Policy (all authenticated users can read)
+              { path: 'policy',         element: <PolicyListPage /> },
+              { path: 'policy/:id',     element: <PolicyDetailPage /> },
+
+              // Travel Team routes (bookings live here too)
               {
                 element: <RequireAuth allowedRoles={[UserRole.TRAVEL_TEAM, UserRole.OWNER, UserRole.ADMIN]} />,
                 children: [
-                  { path: 'bookings',   element: <PageLoader /> },
+                  { path: 'bookings',   element: <BookingsListPage /> },
                   { path: 'vendors',    element: <PageLoader /> },
                 ],
               },
 
-              // Admin / Owner — members + budget admin
+              // Admin / Owner — members + policy admin
               {
                 element: <RequireAuth allowedRoles={[UserRole.ADMIN, UserRole.OWNER]} />,
                 children: [
                   { path: 'invoices',         element: <PageLoader /> },
                   { path: 'analytics',        element: <PageLoader /> },
                   { path: 'admin/members',    element: <MembersAdminPage /> },
+                  { path: 'admin/policies',   element: <PolicyAdminPage /> },
                 ],
               },
 
