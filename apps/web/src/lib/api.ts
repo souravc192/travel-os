@@ -172,6 +172,45 @@ export const bookingApi = {
   invoiceUrl: (id: string) => `${BASE_URL}/bookings/${id}/invoice`,
 };
 
+export const reimbursementApi = {
+  // Categories
+  listCategories:   (params?: { includeInactive?: boolean }) =>
+    api.get('/reimbursements/categories', { params }),
+  createCategory:   (data: { name: string; description?: string }) =>
+    api.post('/reimbursements/categories', data),
+  updateCategory:   (id: string, data: { name?: string; description?: string; isActive?: boolean }) =>
+    api.patch(`/reimbursements/categories/${id}`, data),
+
+  // Headers
+  list:    (params?: Record<string, unknown>) => api.get('/reimbursements', { params }),
+  get:     (id: string) => api.get(`/reimbursements/${id}`),
+  create:  (data: unknown) => api.post('/reimbursements', data),
+  update:  (id: string, data: unknown) => api.patch(`/reimbursements/${id}`, data),
+  submit:  (id: string) => api.post(`/reimbursements/${id}/submit`),
+  cancel:  (id: string, data: { reason?: string }) =>
+    api.post(`/reimbursements/${id}/cancel`, data),
+  decide:  (id: string, data: {
+    action: 'APPROVE' | 'REJECT';
+    note?: string;
+    itemApprovals?: Array<{ id: string; approvedAmount: number }>;
+  }) => api.post(`/reimbursements/${id}/decide`, data),
+  pay:     (id: string, data: { paidReference: string }) =>
+    api.post(`/reimbursements/${id}/pay`, data),
+
+  // Items
+  addItem:        (id: string, data: unknown) => api.post(`/reimbursements/${id}/items`, data),
+  updateItem:     (itemId: string, data: unknown) => api.patch(`/reimbursements/items/${itemId}`, data),
+  deleteItem:     (itemId: string) => api.delete(`/reimbursements/items/${itemId}`),
+  uploadReceipt:  (itemId: string, file: File) => {
+    const fd = new FormData();
+    fd.append('file', file);
+    return api.post(`/reimbursements/items/${itemId}/receipt`, fd, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    });
+  },
+  receiptUrl:     (itemId: string) => `${BASE_URL}/reimbursements/items/${itemId}/receipt`,
+};
+
 export const policyApi = {
   list:           () => api.get('/policies'),
   get:            (id: string) => api.get(`/policies/${id}`),
@@ -203,5 +242,57 @@ export const notificationApi = {
 export const departmentApi = {
   list: () => api.get('/departments'),
 };
+
+// ─── Helpers ─────────────────────────────────────────────────
+//
+// Open an authenticated PDF (or any auth-gated binary endpoint) in a new tab.
+// Plain <a href="…"> tags don't attach the JWT (we keep it in memory, not in a
+// cookie), so the API would reject them with NO_TOKEN. We instead fetch the
+// resource with the auth header, wrap it in a blob:// URL, and open that.
+export async function openAuthPdf(absoluteOrRelativeUrl: string): Promise<void> {
+  // Strip the BASE_URL prefix so axios can re-add baseURL + the auth header.
+  const relUrl = absoluteOrRelativeUrl.startsWith(BASE_URL)
+    ? absoluteOrRelativeUrl.slice(BASE_URL.length)
+    : absoluteOrRelativeUrl;
+  try {
+    const res = await api.get(relUrl, { responseType: 'blob' });
+    const blob = res.data instanceof Blob
+      ? res.data
+      : new Blob([res.data], { type: 'application/pdf' });
+    const url = URL.createObjectURL(blob);
+    const newTab = window.open(url, '_blank', 'noopener,noreferrer');
+    if (!newTab) {
+      // Popup blocked — trigger a download fallback
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = '';
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+    }
+    // Revoke shortly after; the new tab/download has copied the bytes by then.
+    setTimeout(() => URL.revokeObjectURL(url), 60_000);
+  } catch (err) {
+    console.error('Failed to open authenticated file', err);
+    const e = err as { response?: { data?: unknown } };
+    const msg = typeof e.response?.data === 'string'
+      ? e.response.data
+      : 'Could not open the file. Please try again.';
+    alert(msg);
+  }
+}
+
+// Fetch a PDF and return the blob URL — for embedding in <iframe> or <embed>.
+// Caller is responsible for revoking the URL.
+export async function fetchAuthPdfBlobUrl(absoluteOrRelativeUrl: string): Promise<string> {
+  const relUrl = absoluteOrRelativeUrl.startsWith(BASE_URL)
+    ? absoluteOrRelativeUrl.slice(BASE_URL.length)
+    : absoluteOrRelativeUrl;
+  const res  = await api.get(relUrl, { responseType: 'blob' });
+  const blob = res.data instanceof Blob
+    ? res.data
+    : new Blob([res.data], { type: 'application/pdf' });
+  return URL.createObjectURL(blob);
+}
 
 export default api;

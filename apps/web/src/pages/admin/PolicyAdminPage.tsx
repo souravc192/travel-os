@@ -4,7 +4,7 @@ import {
   Plus, Upload, FileSpreadsheet, CheckCircle2, AlertTriangle,
   Eye, BookOpen, Trash2, ChevronDown, X, Save,
 } from 'lucide-react';
-import { policyApi } from '../../lib/api';
+import { policyApi, openAuthPdf, fetchAuthPdfBlobUrl } from '../../lib/api';
 import type { PolicyNode } from '../policy/PolicyDetailPage';
 
 interface Policy {
@@ -170,6 +170,7 @@ function PolicyDetailPanel({ policy, onChanged }: {
   const fileRef = useRef<HTMLInputElement | null>(null);
   const [versions, setVersions] = useState<Version[]>([]);
   const [preview,  setPreview]  = useState<Version | null>(null);
+  const [previewPdfUrl, setPreviewPdfUrl] = useState<string | null>(null);
   const [busy,     setBusy]     = useState(false);
   const [error,    setError]    = useState<string | null>(null);
   const [msg,      setMsg]      = useState<string | null>(null);
@@ -179,6 +180,27 @@ function PolicyDetailPanel({ policy, onChanged }: {
     setVersions(r.data.data);
   }
   useEffect(() => { loadVersions(); }, [policy.id]); // eslint-disable-line
+
+  // Pull the PDF as an auth'd blob URL whenever the preview version changes,
+  // so we can render it inline in an <iframe> alongside the parsed cards.
+  useEffect(() => {
+    let cancelled = false;
+    let urlToRevoke: string | null = null;
+    setPreviewPdfUrl(null);
+    if (preview?.id) {
+      fetchAuthPdfBlobUrl(policyApi.pdfUrl(preview.id))
+        .then((u) => {
+          if (cancelled) { URL.revokeObjectURL(u); return; }
+          urlToRevoke = u;
+          setPreviewPdfUrl(u);
+        })
+        .catch(() => {/* iframe just stays empty */});
+    }
+    return () => {
+      cancelled = true;
+      if (urlToRevoke) URL.revokeObjectURL(urlToRevoke);
+    };
+  }, [preview?.id]);
 
   async function onUpload(file: File) {
     setBusy(true); setError(null); setMsg(null);
@@ -290,8 +312,35 @@ function PolicyDetailPanel({ policy, onChanged }: {
               </button>
             </div>
           </div>
-          <div className="space-y-2 max-h-[60vh] overflow-y-auto p-1">
-            {preview.parsedTree.tree.map((n) => <PreviewCard key={n.id} node={n} />)}
+          <div className="grid lg:grid-cols-2 gap-3">
+            <div className="space-y-2 max-h-[70vh] overflow-y-auto p-1">
+              <p className="text-[10px] uppercase tracking-wider px-1"
+                style={{ color: 'rgb(var(--content-muted))' }}>Parsed cards</p>
+              {preview.parsedTree.tree.map((n) => <PreviewCard key={n.id} node={n} />)}
+            </div>
+            <div className="space-y-2">
+              <p className="text-[10px] uppercase tracking-wider px-1"
+                style={{ color: 'rgb(var(--content-muted))' }}>Source PDF</p>
+              {previewPdfUrl ? (
+                <iframe
+                  src={previewPdfUrl}
+                  title={`Policy preview · v${preview.versionNumber}`}
+                  className="w-full rounded-xl"
+                  style={{
+                    height: '70vh',
+                    background: 'rgb(var(--surface-elevated))',
+                    border: '1px solid rgb(var(--border-subtle))',
+                  }}
+                />
+              ) : (
+                <div className="skeleton rounded-xl" style={{ height: '70vh' }} />
+              )}
+              <button onClick={() => openAuthPdf(policyApi.pdfUrl(preview.id))}
+                className="text-[11px] underline"
+                style={{ color: 'rgb(var(--accent))' }}>
+                Open PDF in new tab
+              </button>
+            </div>
           </div>
         </div>
       )}
@@ -337,14 +386,15 @@ function PolicyDetailPanel({ policy, onChanged }: {
                   </p>
                 </div>
                 <div className="flex gap-1 flex-shrink-0">
-                  <a href={`/api/v1/policies/versions/${v.id}/pdf`} target="_blank" rel="noreferrer"
+                  <button type="button"
+                    onClick={() => openAuthPdf(policyApi.pdfUrl(v.id))}
                     className="px-2 py-1 rounded-lg text-[10px] font-semibold"
                     style={{
                       background: 'rgb(var(--surface-base))',
                       color: 'rgb(var(--content-secondary))',
                     }}>
                     PDF
-                  </a>
+                  </button>
                   {!v.isPublished && (
                     <>
                       <button onClick={async () => {

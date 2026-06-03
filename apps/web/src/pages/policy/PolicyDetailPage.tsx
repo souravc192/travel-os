@@ -5,7 +5,7 @@ import {
   ArrowLeft, ChevronDown, History, FileText, Search,
   BookOpen, AlertTriangle, Calendar,
 } from 'lucide-react';
-import { policyApi } from '../../lib/api';
+import { policyApi, openAuthPdf } from '../../lib/api';
 
 export interface PolicyNode {
   id:       string;
@@ -254,12 +254,13 @@ export default function PolicyDetailPage() {
             ))}
           </div>
 
-          <a href={`/api/v1/policies/versions/${v.id}/pdf`} target="_blank" rel="noreferrer"
+          <button type="button"
+            onClick={() => openAuthPdf(policyApi.pdfUrl(v.id))}
             className="inline-flex items-center gap-1.5 text-xs"
             style={{ color: 'rgb(var(--content-muted))' }}>
             <FileText className="w-3.5 h-3.5" />
             Source PDF · {v.sourceFilename}
-          </a>
+          </button>
         </>
       ) : (
         <div className="glass p-10 text-center">
@@ -300,12 +301,12 @@ export default function PolicyDetailPage() {
                       <span style={{ color: 'rgb(var(--content-primary))' }}>
                         v{ov.versionNumber} · {ov.sourceFilename}
                       </span>
-                      <a href={`/api/v1/policies/versions/${ov.id}/pdf`}
-                        target="_blank" rel="noreferrer"
+                      <button type="button"
+                        onClick={() => openAuthPdf(policyApi.pdfUrl(ov.id))}
                         className="text-[11px] underline"
                         style={{ color: 'rgb(var(--accent))' }}>
                         Open PDF
-                      </a>
+                      </button>
                     </li>
                   ))}
                 </ul>

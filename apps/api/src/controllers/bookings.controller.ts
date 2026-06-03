@@ -52,6 +52,9 @@ function shape(row: Record<string, unknown> | undefined | null) {
     confirmedAt:             row.confirmed_at,
     createdAt:               row.created_at,
     updatedAt:               row.updated_at,
+    venueCapacity:           row.venue_capacity ?? null,
+    travelSegmentId:         row.travel_segment_id ?? null,
+    accommodationSegmentId:  row.accommodation_segment_id ?? null,
   };
 }
 
@@ -125,23 +128,33 @@ export async function createBooking(req: Request, res: Response, next: NextFunct
     );
     const departmentBudgetId = budRes.rows[0]?.id ?? null;
 
+    // Optional Phase 5B loose link to a specific segment
+    const travelSegmentId        = b.travelSegmentId ?? null;
+    const accommodationSegmentId = b.accommodationSegmentId ?? null;
+
+    // venue_capacity (Phase 5A) — null unless caller provides it
+    const venueCapacity = b.venueCapacity != null ? parseInt(String(b.venueCapacity), 10) : null;
+
     const result = await db.query(
       `INSERT INTO bookings (
          travel_request_id, booking_type, booking_status, vendor_name, amount, currency,
          booking_reference, booking_date, departure_at, return_at,
          check_in_date, check_out_date, notes,
-         department_budget_id, created_by
+         department_budget_id, created_by,
+         venue_capacity, travel_segment_id, accommodation_segment_id
        ) VALUES (
          $1, $2, 'PENDING', $3, $4, COALESCE($5, 'INR'),
          $6, $7, $8, $9,
          $10, $11, $12,
-         $13, $14
+         $13, $14,
+         $15, $16, $17
        ) RETURNING *`,
       [
         b.travelRequestId, b.bookingType, b.vendorName, amount, b.currency,
         b.bookingReference ?? null, b.bookingDate, b.departureAt ?? null, b.returnAt ?? null,
         b.checkInDate ?? null, b.checkOutDate ?? null, b.notes ?? null,
         departmentBudgetId, userId,
+        venueCapacity, travelSegmentId, accommodationSegmentId,
       ]
     );
     res.status(201).json({ success: true, data: shape(result.rows[0]) });
@@ -177,6 +190,9 @@ export async function updateBooking(req: Request, res: Response, next: NextFunct
     add('check_in_date',      b.checkInDate);
     add('check_out_date',     b.checkOutDate);
     add('notes',              b.notes);
+    add('venue_capacity',     b.venueCapacity);
+    add('travel_segment_id',  b.travelSegmentId);
+    add('accommodation_segment_id', b.accommodationSegmentId);
 
     if (updates.length === 0) return bad(res, 'NO_UPDATES', 'No editable fields provided.');
     params.push(req.params.id);
@@ -462,7 +478,9 @@ export async function listBookings(req: Request, res: Response, next: NextFuncti
 
     const result = await db.query(
       `SELECT b.*, tr.request_code, tr.traveler_full_name,
-              tr.booking_destination AS request_destination,
+              (SELECT ts.to_location FROM travel_segments ts
+                WHERE ts.travel_request_id = tr.id
+                ORDER BY ts.sequence_no DESC LIMIT 1) AS request_destination,
               d.name AS department_name
          FROM bookings b
          JOIN travel_requests tr ON tr.id = b.travel_request_id

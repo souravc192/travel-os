@@ -22,7 +22,8 @@ interface Detail {
   id: string;
   request_code: string;
   status: string;
-  urgency: 'NORMAL' | 'URGENT';
+  urgency: 'NORMAL' | 'URGENT' | 'EMERGENCY';
+  expansion_center_id: string | null;
   current_level: number;
   request_for: string;
   request_kind: string;
@@ -40,18 +41,9 @@ interface Detail {
   decided_at: string | null;
   submitted_on_behalf: boolean;
   on_behalf_cost_centre: string | null;
-  booking_boarding: string | null;
-  booking_visiting_reason: string | null;
-  booking_destination: string | null;
-  booking_departure_date: string | null;
-  booking_preferred_time: string | null;
-  booking_purpose: string | null;
-  booking_remarks: string | null;
-  stay_visiting_center: string | null;
-  stay_location: string | null;
-  stay_check_in: string | null;
-  stay_check_out: string | null;
-  stay_remarks: string | null;
+  purpose: string | null;
+  remarks: string | null;
+  earliest_travel_date: string | null;
   student_details: Record<string, string> | null;
   guest_details: Record<string, string> | null;
   new_member_details: Record<string, string> | null;
@@ -59,6 +51,20 @@ interface Detail {
   traveler_details: Record<string, string> | null;
   submitted_by_user_id: string;
   approvals: Approval[];
+  travel_segments: Array<{
+    id: string; sequence_no: number;
+    from_location: string; to_location: string;
+    travel_date: string; preferred_time: string | null;
+    travel_mode: string; notes: string | null;
+  }>;
+  accommodation_segments: Array<{
+    id: string; sequence_no: number;
+    city: string; center: string | null;
+    check_in_date: string; check_out_date: string;
+    hotel_requirement: string;
+    hotel_requirement_other: string | null;
+    notes: string | null;
+  }>;
 }
 
 const STATUS_META: Record<string, { label: string; color: string; icon: React.ElementType }> = {
@@ -230,8 +236,14 @@ export default function TravelRequestDetailPage() {
               </span>
               {data.urgency === 'URGENT' && (
                 <span className="text-[10px] uppercase tracking-wide px-2 py-0.5 rounded"
-                  style={{ background: 'rgb(var(--status-danger)/0.12)', color: 'rgb(var(--status-danger))' }}>
+                  style={{ background: 'rgb(var(--status-warning)/0.12)', color: 'rgb(var(--status-warning))' }}>
                   Urgent
+                </span>
+              )}
+              {data.urgency === 'EMERGENCY' && (
+                <span className="text-[10px] uppercase tracking-wide px-2 py-0.5 rounded font-bold"
+                  style={{ background: 'rgb(var(--status-danger)/0.15)', color: 'rgb(var(--status-danger))' }}>
+                  Emergency
                 </span>
               )}
             </div>
@@ -299,9 +311,17 @@ export default function TravelRequestDetailPage() {
           <KV label="Name" value={data.traveler_full_name} />
           <KV label="Employee ID" value={<span className="font-mono">{data.traveler_employee_code}</span>} />
           <KV label="Email" value={data.traveler_email} />
-          <KV label="Designation" value={data.traveler_designation} />
+          {/* Designation is confidential — only Owner / Admin / Travel Team see it */}
+          {(user?.role === UserRole.OWNER ||
+            user?.role === UserRole.ADMIN ||
+            user?.role === UserRole.TRAVEL_TEAM) && (
+            <KV label="Designation" value={data.traveler_designation} />
+          )}
           <KV label="Department" value={data.department_name} />
           <KV label="Approval Levels" value={String(data.traveler_no_of_approvers)} />
+          {data.expansion_center_id && (
+            <KV label="Center ID" value={<span className="font-mono">{data.expansion_center_id}</span>} />
+          )}
         </div>
         {data.submitted_on_behalf && (
           <div className="mt-3 p-2 rounded-lg text-[11px]"
@@ -324,33 +344,93 @@ export default function TravelRequestDetailPage() {
         </div>
       </Section>
 
-      {data.reservation_type !== 'STAY' && data.booking_destination && (
-        <Section title="Booking" icon={Plane}>
-          <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
-            <KV label="Boarding"        value={data.booking_boarding} />
-            <KV label="Destination"     value={data.booking_destination} />
-            <KV label="Departure Date"  value={fmtDate(data.booking_departure_date)} />
-            <KV label="Preferred Time"  value={data.booking_preferred_time} />
-            <KV label="Visiting Reason" value={data.booking_visiting_reason} />
-          </div>
-          {(data.booking_purpose || data.booking_remarks) && (
-            <div className="grid md:grid-cols-2 gap-3 mt-3">
-              {data.booking_purpose && <KV label="Purpose" value={data.booking_purpose} />}
-              {data.booking_remarks && <KV label="Remarks" value={data.booking_remarks} />}
-            </div>
-          )}
+      {data.travel_segments?.length > 0 && (
+        <Section title={`Travel Itinerary (${data.travel_segments.length} segment${data.travel_segments.length > 1 ? 's' : ''})`} icon={Plane}>
+          <ol className="space-y-2">
+            {data.travel_segments.map((s) => (
+              <li key={s.id} className="rounded-xl p-3"
+                style={{ background: 'rgb(var(--surface-elevated))' }}>
+                <div className="flex items-center gap-2 flex-wrap">
+                  <span className="text-[10px] uppercase tracking-wider font-semibold"
+                    style={{ color: 'rgb(var(--content-muted))' }}>
+                    Segment {s.sequence_no}
+                  </span>
+                  <span className="text-[10px] uppercase tracking-wide px-1.5 py-0.5 rounded font-semibold"
+                    style={{
+                      background: 'rgb(var(--accent-subtle))',
+                      color: 'rgb(var(--accent-text))',
+                    }}>
+                    {s.travel_mode.replace('_', ' ')}
+                  </span>
+                </div>
+                <p className="text-sm font-semibold mt-1"
+                  style={{ color: 'rgb(var(--content-primary))' }}>
+                  {s.from_location} → {s.to_location}
+                </p>
+                <p className="text-[11px] mt-0.5 font-mono"
+                  style={{ color: 'rgb(var(--content-muted))' }}>
+                  {fmtDate(s.travel_date)}
+                  {s.preferred_time && ` · ${s.preferred_time}`}
+                </p>
+                {s.notes && (
+                  <p className="text-[11px] mt-1"
+                    style={{ color: 'rgb(var(--content-secondary))' }}>{s.notes}</p>
+                )}
+              </li>
+            ))}
+          </ol>
         </Section>
       )}
 
-      {data.needs_stay && (
-        <Section title="Stay" icon={Hotel}>
-          <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
-            <KV label="Visiting Center" value={data.stay_visiting_center} />
-            <KV label="Location"        value={data.stay_location} />
-            <KV label="Check-In"        value={fmtDate(data.stay_check_in)} />
-            <KV label="Check-Out"       value={fmtDate(data.stay_check_out)} />
+      {data.accommodation_segments?.length > 0 && (
+        <Section title={`Accommodation (${data.accommodation_segments.length} stay${data.accommodation_segments.length > 1 ? 's' : ''})`} icon={Hotel}>
+          <ol className="space-y-2">
+            {data.accommodation_segments.map((a) => (
+              <li key={a.id} className="rounded-xl p-3"
+                style={{ background: 'rgb(var(--surface-elevated))' }}>
+                <div className="flex items-center gap-2 flex-wrap">
+                  <span className="text-[10px] uppercase tracking-wider font-semibold"
+                    style={{ color: 'rgb(var(--content-muted))' }}>
+                    Stay {a.sequence_no}
+                  </span>
+                  <span className="text-[10px] uppercase tracking-wide px-1.5 py-0.5 rounded font-semibold"
+                    style={{
+                      background: 'rgb(var(--status-info)/0.12)',
+                      color: 'rgb(var(--status-info))',
+                    }}>
+                    {a.hotel_requirement.replace(/_/g, ' ')}
+                    {a.hotel_requirement === 'OTHER' && a.hotel_requirement_other
+                      ? ` — ${a.hotel_requirement_other}` : ''}
+                  </span>
+                </div>
+                <p className="text-sm font-semibold mt-1"
+                  style={{ color: 'rgb(var(--content-primary))' }}>
+                  {a.city}
+                  {a.center && (
+                    <span className="font-normal"
+                      style={{ color: 'rgb(var(--content-muted))' }}> · {a.center}</span>
+                  )}
+                </p>
+                <p className="text-[11px] mt-0.5 font-mono"
+                  style={{ color: 'rgb(var(--content-muted))' }}>
+                  {fmtDate(a.check_in_date)} → {fmtDate(a.check_out_date)}
+                </p>
+                {a.notes && (
+                  <p className="text-[11px] mt-1"
+                    style={{ color: 'rgb(var(--content-secondary))' }}>{a.notes}</p>
+                )}
+              </li>
+            ))}
+          </ol>
+        </Section>
+      )}
+
+      {(data.purpose || data.remarks) && (
+        <Section title="Purpose & Remarks" icon={Building2}>
+          <div className="grid md:grid-cols-2 gap-3">
+            {data.purpose && <KV label="Purpose" value={data.purpose} />}
+            {data.remarks && <KV label="Remarks" value={data.remarks} />}
           </div>
-          {data.stay_remarks && <div className="mt-3"><KV label="Remarks" value={data.stay_remarks} /></div>}
         </Section>
       )}
 
@@ -372,11 +452,26 @@ export default function TravelRequestDetailPage() {
 
       {/* ── Bookings panel (Phase 4) ─────────────────────────── */}
       {['APPROVED', 'AUTO_APPROVED'].includes(data.status) && (
-        <BookingsPanel requestId={data.id} canEdit={
-          user?.role === UserRole.TRAVEL_TEAM ||
-          user?.role === UserRole.ADMIN ||
-          user?.role === UserRole.OWNER
-        } />
+        <BookingsPanel
+          requestId={data.id}
+          canEdit={
+            user?.role === UserRole.TRAVEL_TEAM ||
+            user?.role === UserRole.ADMIN ||
+            user?.role === UserRole.OWNER
+          }
+          segments={[
+            ...(data.travel_segments ?? []).map((s) => ({
+              id: s.id,
+              kind: 'travel' as const,
+              label: `Seg ${s.sequence_no} · ${s.from_location} → ${s.to_location} · ${fmtDate(s.travel_date)}`,
+            })),
+            ...(data.accommodation_segments ?? []).map((a) => ({
+              id: a.id,
+              kind: 'accommodation' as const,
+              label: `Stay ${a.sequence_no} · ${a.city}${a.center ? ' (' + a.center + ')' : ''} · ${fmtDate(a.check_in_date)} → ${fmtDate(a.check_out_date)}`,
+            })),
+          ]}
+        />
       )}
 
       {/* ── Action bar ───────────────────────────────────────── */}

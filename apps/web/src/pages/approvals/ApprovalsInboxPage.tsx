@@ -10,14 +10,14 @@ interface InboxRow {
   id: string;
   request_code: string;
   status: string;
-  urgency: 'NORMAL' | 'URGENT';
+  urgency: 'NORMAL' | 'URGENT' | 'EMERGENCY';
   current_level: number;
   request_for: string;
   reason_of_travel: string;
   traveler_full_name: string;
-  booking_boarding: string | null;
-  booking_destination: string | null;
-  booking_departure_date: string | null;
+  first_from: string | null;
+  last_to: string | null;
+  earliest_travel_date: string | null;
   submitted_at: string;
   department_name: string;
   my_level: number;
@@ -120,10 +120,19 @@ export default function ApprovalsInboxPage() {
                       {r.urgency === 'URGENT' && (
                         <span className="text-[10px] uppercase tracking-wide px-1.5 py-0.5 rounded font-semibold"
                           style={{
-                            background: 'rgb(var(--status-danger)/0.12)',
-                            color: 'rgb(var(--status-danger))',
+                            background: 'rgb(var(--status-warning)/0.12)',
+                            color: 'rgb(var(--status-warning))',
                           }}>
                           Urgent
+                        </span>
+                      )}
+                      {r.urgency === 'EMERGENCY' && (
+                        <span className="text-[10px] uppercase tracking-wide px-1.5 py-0.5 rounded font-bold"
+                          style={{
+                            background: 'rgb(var(--status-danger)/0.15)',
+                            color: 'rgb(var(--status-danger))',
+                          }}>
+                          Emergency
                         </span>
                       )}
                       <span className="text-[10px] uppercase tracking-wide px-1.5 py-0.5 rounded font-semibold"
@@ -145,10 +154,10 @@ export default function ApprovalsInboxPage() {
                     <p className="text-[11px] mt-1 inline-flex items-center gap-1 flex-wrap"
                       style={{ color: 'rgb(var(--content-secondary))' }}>
                       <MapPin className="w-3 h-3" />
-                      {r.booking_boarding || '—'} → {r.booking_destination || '—'}
+                      {r.first_from || '—'} → {r.last_to || '—'}
                       <Calendar className="w-3 h-3 ml-2" />
-                      {r.booking_departure_date
-                        ? new Date(r.booking_departure_date).toLocaleDateString('en-IN',
+                      {r.earliest_travel_date
+                        ? new Date(r.earliest_travel_date).toLocaleDateString('en-IN',
                             { day: '2-digit', month: 'short' })
                         : '—'}
                     </p>

@@ -1,4 +1,184 @@
-# Travel OS — Phase 4: Bookings + Policy Knowledge Base (current)
+# Travel OS — Phase 5B: Multi-segment travel (current)
+
+## Phase 5B — what shipped
+
+### 1. Schema
+- New table `travel_segments` (one row per journey leg):
+  - `sequence_no`, `from_location`, `to_location`, `travel_date`,
+    `preferred_time`, `travel_mode` (enum `travel_mode_seg`), `notes`.
+- New table `accommodation_segments` (one row per stay):
+  - `sequence_no`, `city`, `center`, `check_in_date`, `check_out_date`,
+    `hotel_requirement` (enum), `hotel_requirement_other`, `notes`.
+- `bookings` gets **two new nullable FKs**: `travel_segment_id` and
+  `accommodation_segment_id` — loose link per M2(a). Type of the booking
+  decides which one is set.
+- `travel_requests` loses the flat single-trip columns (booking_boarding,
+  booking_destination, booking_departure_date, …, stay_*) and gains
+  request-level `purpose`, `remarks`, plus a denormalised
+  `earliest_travel_date` cached for fast urgency / sort queries.
+- Pre-Phase-5B `travel_requests` rows were dummy data; the migration
+  TRUNCATEs them before the column drop (cascades to approvals, bookings,
+  budget history rows referencing them).
+
+### 2. Backend
+- `travel-requests.controller.ts::createRequest`:
+  - Accepts `travelSegments[]` (≥1 required) + `accommodationSegments[]`.
+  - Validates per-row (from/to differ, dates parseable, modes/requirements valid,
+    accommodation check-out > check-in, OTHER requirement needs free text).
+  - Travel segments must be in non-decreasing date order.
+  - Urgency now keyed off **MIN(travel_date)** across segments — replaces the
+    Phase-5A `booking_departure_date` input. `computeUrgency()` unchanged.
+  - Approval chain logic unchanged (urgency → middle slot, blank/self skip).
+- `getRequest` returns `travel_segments` and `accommodation_segments` alongside
+  the request body.
+- `listRequests` + `listPendingApprovals` expose `first_from`, `last_to`,
+  `earliest_travel_date`, and `segments_count` derived columns for
+  at-a-glance list rendering.
+- `bookings.controller.ts::createBooking` + `updateBooking` accept optional
+  `travelSegmentId` / `accommodationSegmentId` and persist them.
+
+### 3. Frontend
+- `NewTravelRequestPage`:
+  - Replaces the flat Booking + Stay sections with two dynamic-row sections:
+    **Travel Segments** and **Accommodation Segments**, each with "+ Add" and
+    "× Remove" controls and validation. Travel always has ≥1 row; accommodation
+    starts empty and is opt-in.
+  - Urgency badge now watches `MIN(travelSegments[*].travelDate)`.
+  - New request-level **Purpose & Remarks** section replaces the per-booking
+    purpose/remarks fields.
+  - `needsStay` derived from `accommodationSegments.length > 0`.
+- `TravelRequestDetailPage`:
+  - Renders an ordered list of travel segments (with mode badge) and a
+    matching accommodation list (with requirement badge), in place of the
+    old single Booking / Stay sections.
+- `MyTravelRequestsPage` + `ApprovalsInboxPage` + `DashboardPage`:
+  - Read `first_from` / `last_to` / `earliest_travel_date` / `segments_count`
+    from the API to show "Delhi → Bengaluru (+2 more)" style summaries.
+- `BookingFormModal` + `BookingsPanel`:
+  - Optional **Link to Segment** dropdown. The dropdown auto-filters to
+    Travel segments for transport bookings and Accommodation segments for
+    HOTEL / CONFERENCE_HALL bookings.
+
+## DB migrations — full order
+```
+psql $DATABASE_URL -f apps/api/src/migrations/001_initial_schema.sql
+psql $DATABASE_URL -f apps/api/src/migrations/001b_seed.sql
+psql $DATABASE_URL -f apps/api/src/migrations/002_budget_alerts.sql
+psql $DATABASE_URL -f apps/api/src/migrations/003_phase3_overhaul.sql
+psql $DATABASE_URL -f apps/api/src/migrations/003b_seed.sql
+psql $DATABASE_URL -f apps/api/src/migrations/004_phase4_bookings_policy.sql
+psql $DATABASE_URL -f apps/api/src/migrations/005_phase5a_urgency_booking.sql
+psql $DATABASE_URL -f apps/api/src/migrations/006_phase5b_multi_segment.sql
+```
+Or one-shot: `npm run migrate:all` (from `apps/api`).
+
+> **Heads-up**: `006_phase5b_multi_segment.sql` TRUNCATEs `travel_requests`
+> before dropping the legacy flat columns. Existing approvals, bookings, and
+> budget-history rows cascade. This is per the design call M1 (dummy data).
+
+## What Phase 5C (Reimbursement) needs from Phase 5B
+- Travel-linked reimbursements link to `travel_requests.id`. A reimbursement
+  can optionally drill down to a specific `travel_segments.id` later, but v1
+  links at request level.
+- `bookings.travel_segment_id` / `accommodation_segment_id` mean Travel Team
+  can already attribute spend to a specific leg / stay — handy for
+  reimbursement audit drilldown.
+
+---
+
+# Travel OS — Phase 5A: Urgency rewrite + Center ID + Designation visibility + PDF auth + booking types (superseded)
+
+## Phase 5A — what shipped
+
+### 1. Urgency rewrite — auto-computed three-state with chain swap
+- `urgency_level` enum gains **EMERGENCY** (Phase 4 had only NORMAL / URGENT).
+- Urgency is **auto-computed at submit time** from `booking_departure_date` vs today (calendar-day diff):
+  - `≥ 4 days` → **NORMAL**
+  - `1 – 3 days` → **URGENT**
+  - `0 days` (same day / within 24h) → **EMERGENCY**
+- Chain composition is now **urgency-driven**, replacing the
+  Phase-3 "take first N from `no_of_approvers`" logic:
+  - NORMAL    → L1 → L2  → L3
+  - URGENT    → L1 → HOD → L3
+  - EMERGENCY → L1 → CXO → L3
+- Chain builder (`apps/api/src/controllers/travel-requests.controller.ts::buildChain`):
+  - Drops blank approver-email slots.
+  - Drops any slot whose email equals the submitter's email (self-approval skip).
+  - If `employees.no_of_approvers = 0`, chain is empty → AUTO_APPROVED.
+  - If filtered chain ends up empty, also AUTO_APPROVED.
+- Approve/reject chain advance uses **actual chain row count** (not the raw
+  `traveler_no_of_approvers`), so it correctly finalises shorter post-filter chains.
+- Frontend (`NewTravelRequestPage`) replaces the urgency toggle with a
+  read-only `<UrgencyBadge>` that updates as soon as a departure date is picked.
+- Reusable helper exported from shared-types: `computeUrgency(submitted, departure)`.
+
+### 2. Center ID for "Expansion" department
+- New column `travel_requests.expansion_center_id` (free-text, ≤80 chars).
+- Backend enforces: if traveler's department name is exactly `'Expansion'`,
+  `expansionCenterId` is required on POST.
+- Frontend conditionally renders the field under Member Identification when the
+  autofilled department name is `Expansion`.
+- Displayed on TravelRequestDetailPage in the Traveler section.
+
+### 3. Designation visibility (confidentiality)
+- Designation is now **hidden from User and HOD** roles across the UI.
+- Visible only to **Owner / Admin / Travel Team** — Travel Desk still needs it
+  for ticketing / vendor interactions.
+- Data is still fetched, stored, and available in DB and lookups — only the
+  render-side is gated.
+
+### 4. Policy PDF preview / NO_TOKEN bug fix
+- Root cause: plain `<a href="…/pdf" target="_blank">` couldn't attach the
+  in-memory JWT (we don't keep it in a cookie), so the API rejected with NO_TOKEN.
+- Fix: new helpers in `apps/web/src/lib/api.ts`:
+  - `openAuthPdf(url)` — fetches with auth header, makes a `blob://` URL, opens
+    in a new tab (falls back to a download trigger if popup blocked).
+  - `fetchAuthPdfBlobUrl(url)` — same but returns the blob URL for inline
+    `<iframe>` embedding; caller is responsible for revoking it.
+- All policy & invoice PDF links converted to `openAuthPdf`.
+- Admin policy preview panel now renders the source PDF in an `<iframe>`
+  side-by-side with the parsed cards so reviewers can compare at a glance.
+
+### 5. Booking type additions
+- `booking_type` enum extended with **TRAVELLER** (Tempo Traveller — small bus)
+  and **CONFERENCE_HALL**.
+- New nullable column `bookings.venue_capacity INT` for conference halls.
+- BookingFormModal:
+  - Dropdown now uses friendly labels (`Tempo Traveller`, `Conference Hall`).
+  - Conference Hall flow shows **Event Start / Event End** and a **Venue
+    Capacity** input.
+- BookingsPanel + BookingsListPage:
+  - Truck icon for TRAVELLER, Presentation icon for CONFERENCE_HALL.
+  - Capacity badge rendered next to vendor when set.
+
+## DB migrations — full order
+```
+psql $DATABASE_URL -f apps/api/src/migrations/001_initial_schema.sql
+psql $DATABASE_URL -f apps/api/src/migrations/001b_seed.sql
+psql $DATABASE_URL -f apps/api/src/migrations/002_budget_alerts.sql
+psql $DATABASE_URL -f apps/api/src/migrations/003_phase3_overhaul.sql
+psql $DATABASE_URL -f apps/api/src/migrations/003b_seed.sql
+psql $DATABASE_URL -f apps/api/src/migrations/004_phase4_bookings_policy.sql
+psql $DATABASE_URL -f apps/api/src/migrations/005_phase5a_urgency_booking.sql
+```
+Or one-shot: `npm run migrate:all` (from `apps/api`).
+
+> Note: `005_phase5a_urgency_booking.sql` runs the `ALTER TYPE … ADD VALUE`
+> statements **outside** a `BEGIN/COMMIT` block (Postgres requirement). The
+> `apps/api/scripts/run-migration.js` runner submits the whole file in one
+> `client.query()` call, so this works without splitting the file.
+
+## What Phase 5B (multi-segment travel) needs from Phase 5A
+- `travel_requests.expansion_center_id` is now request-level. When multi-segment
+  lands, each accommodation segment may want its own center reference — keep
+  the request-level field as a default, segments override.
+- `computeUrgency()` is keyed off a single `bookingDepartureDate`; once
+  segments arrive, switch to `MIN(segment_departure_date)` to pick urgency.
+- Chain builder is stateless — works as-is regardless of how segments are stored.
+
+---
+
+# Travel OS — Phase 4: Bookings + Policy Knowledge Base (superseded)
 
 ## Phase 4 — what shipped
 - **Bookings module** (Travel Team can manually record bookings against each travel request):

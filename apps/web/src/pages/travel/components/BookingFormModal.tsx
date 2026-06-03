@@ -17,11 +17,22 @@ interface EditingBooking {
   checkInDate: string | null;
   checkOutDate: string | null;
   notes: string | null;
+  venueCapacity: number | null;
+  travelSegmentId: string | null;
+  accommodationSegmentId: string | null;
+}
+
+// Available segments to link a booking to (Phase 5B loose link)
+export interface SegmentOption {
+  id:     string;
+  label:  string;  // e.g. "Seg 1 · Delhi → Mumbai · 12 Jun"
+  kind:   'travel' | 'accommodation';
 }
 
 interface Props {
   requestId: string;
   editing:   EditingBooking | null;
+  segments?: SegmentOption[];
   onClose:   () => void;
   onSaved:   () => void;
 }
@@ -40,7 +51,7 @@ function isoToLocal(iso: string | null): string {
   return new Date(d.getTime() - off * 60_000).toISOString().slice(0, 16);
 }
 
-export default function BookingFormModal({ requestId, editing, onClose, onSaved }: Props) {
+export default function BookingFormModal({ requestId, editing, segments, onClose, onSaved }: Props) {
   const [type,      setType]      = useState<string>(editing?.bookingType ?? BookingType.FLIGHT);
   const [vendor,    setVendor]    = useState(editing?.vendorName ?? '');
   const [amount,    setAmount]    = useState<string>(editing ? String(editing.amount) : '');
@@ -51,10 +62,16 @@ export default function BookingFormModal({ requestId, editing, onClose, onSaved 
   const [checkIn,   setCheckIn]   = useState(editing?.checkInDate?.slice(0, 10) ?? '');
   const [checkOut,  setCheckOut]  = useState(editing?.checkOutDate?.slice(0, 10) ?? '');
   const [notes,     setNotes]     = useState(editing?.notes ?? '');
+  const [capacity,  setCapacity]  = useState<string>(editing?.venueCapacity != null ? String(editing.venueCapacity) : '');
+  const [segmentLink, setSegmentLink] = useState<string>(
+    editing?.travelSegmentId ?? editing?.accommodationSegmentId ?? '');
   const [submitting, setSubmitting] = useState(false);
   const [error,     setError]     = useState<string | null>(null);
 
-  const isHotel = type === BookingType.HOTEL;
+  // Stay-type bookings (use check-in / check-out instead of departure / return)
+  const isStayType = type === BookingType.HOTEL || type === BookingType.CONFERENCE_HALL;
+  const isHotel    = type === BookingType.HOTEL;                  // kept for backward refs
+  const isVenue    = type === BookingType.CONFERENCE_HALL;
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
@@ -63,9 +80,24 @@ export default function BookingFormModal({ requestId, editing, onClose, onSaved 
     const amt = parseFloat(amount);
     if (!Number.isFinite(amt) || amt <= 0) { setError('Amount must be > 0.'); return; }
     if (!bDate) { setError('Booking date is required.'); return; }
-    if (isHotel && checkIn && checkOut && new Date(checkOut) <= new Date(checkIn)) {
+    if (isStayType && checkIn && checkOut && new Date(checkOut) <= new Date(checkIn)) {
       setError('Check-out must be after check-in.'); return;
     }
+    let cap: number | null = null;
+    if (isVenue && capacity.trim()) {
+      const parsed = parseInt(capacity, 10);
+      if (!Number.isFinite(parsed) || parsed <= 0) {
+        setError('Venue capacity must be a positive whole number.');
+        return;
+      }
+      cap = parsed;
+    }
+
+    // Loose link to a segment (Phase 5B). Stay-types attach to accommodation,
+    // travel-types attach to travel segments.
+    const linkedSeg = segments?.find((s) => s.id === segmentLink);
+    const travelSegmentId        = linkedSeg?.kind === 'travel'        ? linkedSeg.id : null;
+    const accommodationSegmentId = linkedSeg?.kind === 'accommodation' ? linkedSeg.id : null;
 
     const payload = {
       travelRequestId:  requestId,
@@ -75,11 +107,14 @@ export default function BookingFormModal({ requestId, editing, onClose, onSaved 
       currency:         'INR',
       bookingReference: ref.trim() || null,
       bookingDate:      bDate,
-      departureAt:      !isHotel && depAt ? new Date(depAt).toISOString() : null,
-      returnAt:         !isHotel && retAt ? new Date(retAt).toISOString() : null,
-      checkInDate:      isHotel ? (checkIn || null) : null,
-      checkOutDate:     isHotel ? (checkOut || null) : null,
+      departureAt:      !isStayType && depAt ? new Date(depAt).toISOString() : null,
+      returnAt:         !isStayType && retAt ? new Date(retAt).toISOString() : null,
+      checkInDate:      isStayType ? (checkIn || null) : null,
+      checkOutDate:     isStayType ? (checkOut || null) : null,
       notes:            notes.trim() || null,
+      venueCapacity:    cap,
+      travelSegmentId,
+      accommodationSegmentId,
     };
 
     setSubmitting(true);
@@ -124,7 +159,14 @@ export default function BookingFormModal({ requestId, editing, onClose, onSaved 
                   style={{ color: 'rgb(var(--content-secondary))' }}>Type</label>
                 <select value={type} onChange={(e) => setType(e.target.value)}
                   className={inputCx} style={inputStyle}>
-                  {Object.values(BookingType).map((t) => <option key={t}>{t}</option>)}
+                  <option value={BookingType.FLIGHT}>Flight</option>
+                  <option value={BookingType.TRAIN}>Train</option>
+                  <option value={BookingType.BUS}>Bus</option>
+                  <option value={BookingType.CAB}>Cab</option>
+                  <option value={BookingType.TRAVELLER}>Tempo Traveller</option>
+                  <option value={BookingType.HOTEL}>Hotel</option>
+                  <option value={BookingType.CONFERENCE_HALL}>Conference Hall</option>
+                  <option value={BookingType.OTHER}>Other</option>
                 </select>
               </div>
               <div>
@@ -161,23 +203,41 @@ export default function BookingFormModal({ requestId, editing, onClose, onSaved 
                 className={inputCx} style={inputStyle} />
             </div>
 
-            {isHotel ? (
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="text-xs font-medium block mb-1.5"
-                    style={{ color: 'rgb(var(--content-secondary))' }}>Check-In</label>
-                  <input type="date" value={checkIn}
-                    onChange={(e) => setCheckIn(e.target.value)}
-                    className={inputCx} style={inputStyle} />
+            {isStayType ? (
+              <>
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="text-xs font-medium block mb-1.5"
+                      style={{ color: 'rgb(var(--content-secondary))' }}>
+                      {isVenue ? 'Event Start' : 'Check-In'}
+                    </label>
+                    <input type="date" value={checkIn}
+                      onChange={(e) => setCheckIn(e.target.value)}
+                      className={inputCx} style={inputStyle} />
+                  </div>
+                  <div>
+                    <label className="text-xs font-medium block mb-1.5"
+                      style={{ color: 'rgb(var(--content-secondary))' }}>
+                      {isVenue ? 'Event End' : 'Check-Out'}
+                    </label>
+                    <input type="date" value={checkOut}
+                      onChange={(e) => setCheckOut(e.target.value)}
+                      className={inputCx} style={inputStyle} />
+                  </div>
                 </div>
-                <div>
-                  <label className="text-xs font-medium block mb-1.5"
-                    style={{ color: 'rgb(var(--content-secondary))' }}>Check-Out</label>
-                  <input type="date" value={checkOut}
-                    onChange={(e) => setCheckOut(e.target.value)}
-                    className={inputCx} style={inputStyle} />
-                </div>
-              </div>
+                {isVenue && (
+                  <div>
+                    <label className="text-xs font-medium block mb-1.5"
+                      style={{ color: 'rgb(var(--content-secondary))' }}>
+                      Venue Capacity (seats)
+                    </label>
+                    <input type="number" min="1" step="1" value={capacity}
+                      onChange={(e) => setCapacity(e.target.value)}
+                      placeholder="e.g. 80"
+                      className={`${inputCx} font-mono`} style={inputStyle} />
+                  </div>
+                )}
+              </>
             ) : (
               <div className="grid grid-cols-2 gap-3">
                 <div>
@@ -194,6 +254,25 @@ export default function BookingFormModal({ requestId, editing, onClose, onSaved 
                     onChange={(e) => setRetAt(e.target.value)}
                     className={inputCx} style={inputStyle} />
                 </div>
+              </div>
+            )}
+
+            {segments && segments.length > 0 && (
+              <div>
+                <label className="text-xs font-medium block mb-1.5"
+                  style={{ color: 'rgb(var(--content-secondary))' }}>
+                  Link to Segment (optional)
+                </label>
+                <select value={segmentLink}
+                  onChange={(e) => setSegmentLink(e.target.value)}
+                  className={inputCx} style={inputStyle}>
+                  <option value="">— Don't link to a segment —</option>
+                  {segments
+                    .filter((s) => isStayType ? s.kind === 'accommodation' : s.kind === 'travel')
+                    .map((s) => (
+                      <option key={s.id} value={s.id}>{s.label}</option>
+                    ))}
+                </select>
               </div>
             )}
 

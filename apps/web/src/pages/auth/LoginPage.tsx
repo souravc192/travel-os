@@ -207,7 +207,7 @@ export default function LoginPage() {
 
         {/* Footer note */}
         <p className="text-xs" style={{ color: 'rgb(var(--content-muted))' }}>
-          © 2024 Travel OS · Enterprise Edition · v1.0.0
+          © 2026 Travel OS · Enterprise Edition · v1.0.0
         </p>
       </motion.div>
 

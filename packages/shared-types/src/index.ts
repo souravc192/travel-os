@@ -16,8 +16,27 @@ export enum UserRole {
 
 // ─── Phase 3 — Travel Request enums ──────────────────────────
 export enum UrgencyLevel {
-  NORMAL = 'NORMAL', // After 3 days
-  URGENT = 'URGENT', // Within 3 days
+  NORMAL    = 'NORMAL',    // ≥ 4 days before departure
+  URGENT    = 'URGENT',    // 1–3 days before departure
+  EMERGENCY = 'EMERGENCY', // < 24 hours / same day
+}
+
+/**
+ * Compute urgency from the gap between submission and departure date.
+ * Both inputs are treated as local calendar dates — diff is whole-day.
+ */
+export function computeUrgency(submittedOn: Date, departureOn: Date): UrgencyLevel {
+  const startOfDay = (d: Date) => {
+    const c = new Date(d);
+    c.setHours(0, 0, 0, 0);
+    return c.getTime();
+  };
+  const days = Math.floor(
+    (startOfDay(departureOn) - startOfDay(submittedOn)) / 86_400_000
+  );
+  if (days >= 4) return UrgencyLevel.NORMAL;
+  if (days >= 1) return UrgencyLevel.URGENT;
+  return UrgencyLevel.EMERGENCY;
 }
 
 export enum RequestFor {
@@ -71,12 +90,14 @@ export type ReasonOfTravel = (typeof REASON_OF_TRAVEL_OPTIONS)[number];
 
 // ─── Phase 4 — Booking enums ─────────────────────────────────
 export enum BookingType {
-  FLIGHT = 'FLIGHT',
-  TRAIN  = 'TRAIN',
-  BUS    = 'BUS',
-  CAB    = 'CAB',
-  HOTEL  = 'HOTEL',
-  OTHER  = 'OTHER',
+  FLIGHT          = 'FLIGHT',
+  TRAIN           = 'TRAIN',
+  BUS             = 'BUS',
+  CAB             = 'CAB',
+  TRAVELLER       = 'TRAVELLER',        // Tempo Traveller (small bus)
+  HOTEL           = 'HOTEL',
+  CONFERENCE_HALL = 'CONFERENCE_HALL',
+  OTHER           = 'OTHER',
 }
 
 export enum BookingStatus {
@@ -84,6 +105,70 @@ export enum BookingStatus {
   CONFIRMED   = 'CONFIRMED',
   CANCELLED   = 'CANCELLED',
   RESCHEDULED = 'RESCHEDULED',
+}
+
+// ─── Phase 5B — Multi-segment travel ─────────────────────────
+// Note: kept distinct from the Phase 1 `TravelMode` enum which retains
+// the legacy 5 values; segments allow a TRAVELLER (Tempo Traveller) leg too.
+export enum SegmentTravelMode {
+  FLIGHT     = 'FLIGHT',
+  TRAIN      = 'TRAIN',
+  BUS        = 'BUS',
+  CAB        = 'CAB',
+  SELF_DRIVE = 'SELF_DRIVE',
+  TRAVELLER  = 'TRAVELLER',   // Tempo Traveller (small bus)
+  OTHER      = 'OTHER',
+}
+
+export enum HotelRequirement {
+  SHARING            = 'SHARING',
+  NON_SHARING        = 'NON_SHARING',
+  SINGLE             = 'SINGLE',
+  DOUBLE             = 'DOUBLE',
+  SUITE              = 'SUITE',
+  SERVICE_APARTMENT  = 'SERVICE_APARTMENT',
+  OTHER              = 'OTHER',
+}
+
+export interface TravelSegmentInput {
+  fromLocation:   string;
+  toLocation:     string;
+  travelDate:     string;             // YYYY-MM-DD
+  travelMode:     SegmentTravelMode;
+  preferredTime:  string | null;
+  notes:          string | null;
+}
+
+export interface AccommodationSegmentInput {
+  city:                   string;
+  center:                 string | null;
+  checkInDate:            string;     // YYYY-MM-DD
+  checkOutDate:           string;
+  hotelRequirement:       HotelRequirement;
+  hotelRequirementOther:  string | null;
+  notes:                  string | null;
+}
+
+// ─── Phase 5C — Reimbursement ────────────────────────────────
+export enum ReimbursementKind {
+  TRAVEL_LINKED = 'TRAVEL_LINKED',
+  STANDALONE    = 'STANDALONE',
+}
+
+export enum ReimbursementStatus {
+  DRAFT     = 'DRAFT',
+  SUBMITTED = 'SUBMITTED',
+  APPROVED  = 'APPROVED',
+  REJECTED  = 'REJECTED',
+  PAID      = 'PAID',
+}
+
+export interface ReimbursementItemInput {
+  categoryId:     string;
+  expenseDate:    string;        // YYYY-MM-DD
+  description:    string;
+  claimedAmount:  number;
+  notes:          string | null;
 }
 
 export interface BookingRow {

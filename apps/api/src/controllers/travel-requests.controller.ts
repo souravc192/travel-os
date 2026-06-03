@@ -3,7 +3,8 @@ import db, { withTransaction, buildPaginationClause } from '../config/db';
 import { logger } from '../config/logger';
 import {
   UserRole, RequestFor, RequestKind, ReservationKind, UrgencyLevel,
-  TravelRequestStatus, REASON_OF_TRAVEL_OPTIONS,
+  TravelRequestStatus, REASON_OF_TRAVEL_OPTIONS, computeUrgency,
+  SegmentTravelMode, HotelRequirement,
 } from '@travel-os/shared-types';
 
 // ─── Helpers ──────────────────────────────────────────────────
@@ -15,6 +16,48 @@ function isUuid(v: unknown): v is string {
   return typeof v === 'string' && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(v);
 }
 
+/**
+ * Build the approval chain per Phase 5A spec.
+ *
+ *   Normal    → L1 → L2  → L3
+ *   Urgent    → L1 → HOD → L3
+ *   Emergency → L1 → CXO → L3
+ *
+ * Rules:
+ *   - Blank email at any slot → that slot is dropped.
+ *   - If submitter's email matches an approver email → that slot is dropped
+ *     (self-approval prevention).
+ *   - If employee.no_of_approvers = 0 → chain is empty (caller should auto-approve).
+ *
+ * Returns the ordered list of approver emails to wire into
+ * travel_request_approvals. Caller assigns levels 1..N in order.
+ */
+function buildChain(opts: {
+  urgency:        UrgencyLevel;
+  noOfApprovers:  number;
+  submitterEmail: string;
+  l1: string | null;
+  l2: string | null;
+  l3: string | null;
+  hod: string | null;
+  cxo: string | null;
+}): string[] {
+  if (opts.noOfApprovers <= 0) return [];
+
+  const middle =
+    opts.urgency === UrgencyLevel.URGENT    ? opts.hod :
+    opts.urgency === UrgencyLevel.EMERGENCY ? opts.cxo :
+                                              opts.l2;
+
+  const raw = [opts.l1, middle, opts.l3];
+  const submitter = (opts.submitterEmail ?? '').trim().toLowerCase();
+
+  return raw
+    .map((e) => (e ?? '').trim().toLowerCase())
+    .filter((e) => e.length > 0)             // drop blanks
+    .filter((e) => e !== submitter);         // drop self
+}
+
 // ─── POST /travel-requests ────────────────────────────────────
 export async function createRequest(req: Request, res: Response, next: NextFunction): Promise<void> {
   try {
@@ -23,7 +66,6 @@ export async function createRequest(req: Request, res: Response, next: NextFunct
 
     // 1. Header / required fields
     const onBehalf = Boolean(body.submittedOnBehalf);
-    const urgency  = body.urgency === 'URGENT' ? UrgencyLevel.URGENT : UrgencyLevel.NORMAL;
 
     if (!REASON_OF_TRAVEL_OPTIONS.includes(body.reasonOfTravel)) {
       return bad(res, 'INVALID_REASON', 'Reason of travel is not in the allowed list.');
@@ -37,17 +79,94 @@ export async function createRequest(req: Request, res: Response, next: NextFunct
     if (!Object.values(RequestFor).includes(body.requestFor)) {
       return bad(res, 'INVALID_REQUEST_FOR', 'requestFor must be one of: ' + Object.values(RequestFor).join(', '));
     }
+    // Multi-segment payload
+    const travelSegmentsRaw = Array.isArray(body.travelSegments) ? body.travelSegments : [];
+    const accommodationSegmentsRaw = Array.isArray(body.accommodationSegments)
+      ? body.accommodationSegments : [];
+
+    if (travelSegmentsRaw.length === 0) {
+      return bad(res, 'NO_SEGMENTS', 'At least one travel segment is required.');
+    }
+
+    // Normalise + validate travel segments
+    type CleanedSeg = {
+      seq: number; from: string; to: string; date: string;
+      mode: SegmentTravelMode; preferredTime: string | null; notes: string | null;
+    };
+    const travelSegments: CleanedSeg[] = [];
+    for (let i = 0; i < travelSegmentsRaw.length; i++) {
+      const s = travelSegmentsRaw[i];
+      const from = String(s?.fromLocation ?? '').trim();
+      const to   = String(s?.toLocation ?? '').trim();
+      const date = String(s?.travelDate ?? '').trim();
+      const mode = s?.travelMode;
+      if (!from || !to) return bad(res, 'SEGMENT_BAD',  `Segment ${i + 1}: from and to are required.`);
+      if (from.toLowerCase() === to.toLowerCase())
+        return bad(res, 'SEGMENT_BAD', `Segment ${i + 1}: from and to must differ.`);
+      if (!date || !/^\d{4}-\d{2}-\d{2}$/.test(date))
+        return bad(res, 'SEGMENT_BAD', `Segment ${i + 1}: travelDate must be YYYY-MM-DD.`);
+      if (!Object.values(SegmentTravelMode).includes(mode))
+        return bad(res, 'SEGMENT_BAD', `Segment ${i + 1}: travelMode is invalid.`);
+      travelSegments.push({
+        seq: i + 1, from, to, date, mode,
+        preferredTime: s?.preferredTime ? String(s.preferredTime).trim() : null,
+        notes:         s?.notes         ? String(s.notes).trim()         : null,
+      });
+    }
+    // Travel dates must be monotonically non-decreasing
+    for (let i = 1; i < travelSegments.length; i++) {
+      if (travelSegments[i].date < travelSegments[i - 1].date) {
+        return bad(res, 'SEGMENTS_OUT_OF_ORDER',
+          `Travel segment ${i + 1} has an earlier date than segment ${i}.`);
+      }
+    }
+
+    // Normalise + validate accommodation segments (optional)
+    type CleanedAcc = {
+      seq: number; city: string; center: string | null;
+      checkIn: string; checkOut: string;
+      requirement: HotelRequirement; requirementOther: string | null; notes: string | null;
+    };
+    const accommodationSegments: CleanedAcc[] = [];
+    for (let i = 0; i < accommodationSegmentsRaw.length; i++) {
+      const s = accommodationSegmentsRaw[i];
+      const city = String(s?.city ?? '').trim();
+      const ci   = String(s?.checkInDate ?? '').trim();
+      const co   = String(s?.checkOutDate ?? '').trim();
+      const req  = s?.hotelRequirement;
+      if (!city) return bad(res, 'ACCOM_BAD', `Accommodation ${i + 1}: city is required.`);
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(ci) || !/^\d{4}-\d{2}-\d{2}$/.test(co))
+        return bad(res, 'ACCOM_BAD', `Accommodation ${i + 1}: check-in / check-out must be YYYY-MM-DD.`);
+      if (co <= ci)
+        return bad(res, 'ACCOM_BAD', `Accommodation ${i + 1}: check-out must be after check-in.`);
+      if (!Object.values(HotelRequirement).includes(req))
+        return bad(res, 'ACCOM_BAD', `Accommodation ${i + 1}: hotelRequirement is invalid.`);
+      const other = req === HotelRequirement.OTHER
+        ? String(s?.hotelRequirementOther ?? '').trim() : null;
+      if (req === HotelRequirement.OTHER && (!other || other.length < 2))
+        return bad(res, 'ACCOM_BAD', `Accommodation ${i + 1}: specify the hotel requirement when choosing Other.`);
+      accommodationSegments.push({
+        seq: i + 1, city,
+        center: s?.center ? String(s.center).trim() : null,
+        checkIn: ci, checkOut: co,
+        requirement: req, requirementOther: other,
+        notes: s?.notes ? String(s.notes).trim() : null,
+      });
+    }
+
     const requestKind = body.requestKind && Object.values(RequestKind).includes(body.requestKind)
       ? body.requestKind : RequestKind.NEW_REQUEST;
     const reservation = body.reservationType && Object.values(ReservationKind).includes(body.reservationType)
       ? body.reservationType : ReservationKind.TRAVEL;
-    const needsStay = Boolean(body.needsStay);
+    const needsStay = accommodationSegments.length > 0;
 
-    // 2. Resolve traveler from Members Master
+    // 2. Resolve traveler from Members Master (+ department name for Expansion check)
     const empRes = await db.query(
       `SELECT e.id, e.name, e.email, e.designation, e.department_id, e.no_of_approvers,
-              e.l1_email, e.l2_email, e.l3_email
+              e.l1_email, e.l2_email, e.l3_email, e.hod_email, e.cxo_email,
+              d.name AS department_name
          FROM employees e
+         LEFT JOIN departments d ON d.id = e.department_id
         WHERE UPPER(e.employee_code) = UPPER($1) AND e.is_active = true`,
       [body.employeeCode]
     );
@@ -56,7 +175,25 @@ export async function createRequest(req: Request, res: Response, next: NextFunct
       return bad(res, 'EMPLOYEE_NOT_FOUND', 'No active employee with that code.', 404);
     }
 
-    // 3. Extension prerequisites
+    // 3. Expansion department → Center ID required
+    const isExpansion = (emp.department_name ?? '').trim() === 'Expansion';
+    const expansionCenterId = isExpansion ? String(body.expansionCenterId ?? '').trim() : null;
+    if (isExpansion && !expansionCenterId) {
+      return bad(res, 'CENTER_ID_REQUIRED', 'Center ID is required for Expansion department travel.');
+    }
+
+    // 4. Auto-compute urgency from the EARLIEST travel-segment date vs today.
+    const earliestTravelDate = travelSegments
+      .map((s) => s.date)
+      .sort()[0];
+    const submittedAt = new Date();
+    const urgency     = computeUrgency(submittedAt, new Date(earliestTravelDate));
+
+    // 5. Submitter email — used for self-approval skip
+    const submitterRes = await db.query(`SELECT email FROM users WHERE id = $1`, [userId]);
+    const submitterEmail = submitterRes.rows[0]?.email ?? '';
+
+    // 6. Extension prerequisites
     let initialRequestId: string | null = null;
     let extensionStartDate: string | null = null;
     if (requestKind === RequestKind.EXTENSION) {
@@ -69,20 +206,30 @@ export async function createRequest(req: Request, res: Response, next: NextFunct
       if (!init.rows[0]) return bad(res, 'INITIAL_NOT_FOUND', 'Linked initial request not found.', 404);
     }
 
-    // 4. Determine status + current_level from chain length
-    const chainLen = Math.max(0, Math.min(3, parseInt(emp.no_of_approvers ?? '0', 10)));
+    // 7. Build chain per urgency + skip blank/self emails
+    const noOfApprovers = Math.max(0, Math.min(3, parseInt(emp.no_of_approvers ?? '0', 10)));
+    const chainEmails   = buildChain({
+      urgency, noOfApprovers,
+      submitterEmail,
+      l1: emp.l1_email, l2: emp.l2_email, l3: emp.l3_email,
+      hod: emp.hod_email, cxo: emp.cxo_email,
+    });
+
+    // 8. Determine status + current_level from final chain
     let status: TravelRequestStatus;
     let currentLevel: number;
-    if (chainLen === 0) {
+    if (chainEmails.length === 0) {
       status       = TravelRequestStatus.AUTO_APPROVED;
       currentLevel = 0;
     } else {
-      status       = (`PENDING_L${chainLen >= 1 ? 1 : 1}`) as TravelRequestStatus;
       status       = TravelRequestStatus.PENDING_L1;
       currentLevel = 1;
     }
 
-    // 5. Insert request + chain (transactional)
+    // 9. Insert request + segments + chain (transactional)
+    const purpose = body.purpose ? String(body.purpose).trim() : null;
+    const remarks = body.remarks ? String(body.remarks).trim() : null;
+
     const out = await withTransaction(async (client) => {
       const inserted = await client.query(
         `INSERT INTO travel_requests (
@@ -93,10 +240,8 @@ export async function createRequest(req: Request, res: Response, next: NextFunct
             request_for, request_kind, reservation_type, needs_stay,
             extension_start_date, initial_request_id,
             student_details, guest_details, new_member_details, event_details, traveler_details,
-            booking_boarding, booking_visiting_reason, booking_destination, booking_departure_date,
-            booking_preferred_time, booking_purpose, booking_remarks,
-            stay_visiting_center, stay_location, stay_check_in, stay_check_out, stay_remarks,
-            status, current_level, decided_at
+            status, current_level, decided_at, expansion_center_id,
+            purpose, remarks, earliest_travel_date
          ) VALUES (
             $1,$2,$3,$4,$5,$6,$7,$8,
             $9,$10,$11,$12,
@@ -104,48 +249,65 @@ export async function createRequest(req: Request, res: Response, next: NextFunct
             $17,$18,$19,$20,
             $21,$22,
             $23,$24,$25,$26,$27,
-            $28,$29,$30,$31,$32,$33,$34,
-            $35,$36,$37,$38,$39,
-            $40,$41,$42
+            $28,$29,$30,$31,
+            $32,$33,$34
          ) RETURNING *`,
         [
           userId, onBehalf, emp.id, body.employeeCode,
           onBehalf ? (body.onBehalfCostCentre ?? null) : null,
           urgency, body.reasonOfTravel, body.reasonOfTravel === 'Others' ? body.reasonOfTravelOther : null,
           emp.name, emp.email, emp.designation, emp.department_id,
-          emp.l1_email, emp.l2_email, emp.l3_email, chainLen,
+          emp.l1_email, emp.l2_email, emp.l3_email, noOfApprovers,
           body.requestFor, requestKind, reservation, needsStay,
           extensionStartDate, initialRequestId,
           body.studentDetails ?? null, body.guestDetails ?? null,
           body.newMemberDetails ?? null, body.eventDetails ?? null, body.travelerDetails ?? null,
-          body.bookingBoarding ?? null, body.bookingVisitingReason ?? null,
-          body.bookingDestination ?? null, body.bookingDepartureDate ?? null,
-          body.bookingPreferredTime ?? null, body.bookingPurpose ?? null, body.bookingRemarks ?? null,
-          needsStay ? (body.stayVisitingCenter ?? null) : null,
-          needsStay ? (body.stayLocation ?? null) : null,
-          needsStay ? (body.stayCheckIn ?? null) : null,
-          needsStay ? (body.stayCheckOut ?? null) : null,
-          needsStay ? (body.stayRemarks ?? null) : null,
           status, currentLevel, status === TravelRequestStatus.AUTO_APPROVED ? new Date() : null,
+          expansionCenterId,
+          purpose, remarks, earliestTravelDate,
         ]
       );
       const tr = inserted.rows[0];
 
-      const chainEmails = [emp.l1_email, emp.l2_email, emp.l3_email].slice(0, chainLen);
+      // Travel segments
+      for (const s of travelSegments) {
+        await client.query(
+          `INSERT INTO travel_segments
+             (travel_request_id, sequence_no, from_location, to_location,
+              travel_date, preferred_time, travel_mode, notes)
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
+          [tr.id, s.seq, s.from, s.to, s.date, s.preferredTime, s.mode, s.notes]
+        );
+      }
+
+      // Accommodation segments
+      for (const a of accommodationSegments) {
+        await client.query(
+          `INSERT INTO accommodation_segments
+             (travel_request_id, sequence_no, city, center, check_in_date, check_out_date,
+              hotel_requirement, hotel_requirement_other, notes)
+           VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)`,
+          [tr.id, a.seq, a.city, a.center, a.checkIn, a.checkOut,
+           a.requirement, a.requirementOther, a.notes]
+        );
+      }
+
+      // Approval chain
       for (let i = 0; i < chainEmails.length; i++) {
-        const email = chainEmails[i];
-        if (!email) continue;
         await client.query(
           `INSERT INTO travel_request_approvals
              (travel_request_id, level, approver_email, status)
            VALUES ($1, $2, $3, 'PENDING')`,
-          [tr.id, i + 1, email.toLowerCase()]
+          [tr.id, i + 1, chainEmails[i]]
         );
       }
       return tr;
     });
 
-    logger.info(`Travel request ${out.request_code} created by ${userId} (status: ${status}, chain: ${chainLen})`);
+    logger.info(
+      `Travel request ${out.request_code} created by ${userId} ` +
+      `(urgency=${urgency}, status=${status}, chain=[${chainEmails.join(' → ')}])`
+    );
     res.status(201).json({ success: true, data: out });
   } catch (err) { next(err); }
 }
@@ -183,7 +345,11 @@ export async function listRequests(req: Request, res: Response, next: NextFuncti
       params.push(`%${search}%`);
       where.push(`(tr.request_code ILIKE $${params.length}
                  OR tr.traveler_full_name ILIKE $${params.length}
-                 OR tr.booking_destination ILIKE $${params.length})`);
+                 OR EXISTS (
+                     SELECT 1 FROM travel_segments ts
+                      WHERE ts.travel_request_id = tr.id
+                        AND (ts.to_location ILIKE $${params.length} OR ts.from_location ILIKE $${params.length})
+                   ))`);
     }
 
     const whereSQL = where.length ? `WHERE ${where.join(' AND ')}` : '';
@@ -193,9 +359,15 @@ export async function listRequests(req: Request, res: Response, next: NextFuncti
       `SELECT tr.id, tr.request_code, tr.status, tr.urgency, tr.current_level,
               tr.request_for, tr.request_kind, tr.reservation_type, tr.needs_stay,
               tr.reason_of_travel, tr.traveler_full_name, tr.traveler_email,
-              tr.booking_boarding, tr.booking_destination, tr.booking_departure_date,
+              tr.earliest_travel_date,
               tr.submitted_at, tr.decided_at, tr.created_at,
-              d.name AS department_name
+              d.name AS department_name,
+              -- First-segment summary (for at-a-glance list display)
+              (SELECT ts.from_location FROM travel_segments ts
+                WHERE ts.travel_request_id = tr.id ORDER BY ts.sequence_no LIMIT 1) AS first_from,
+              (SELECT ts.to_location   FROM travel_segments ts
+                WHERE ts.travel_request_id = tr.id ORDER BY ts.sequence_no DESC LIMIT 1) AS last_to,
+              (SELECT COUNT(*) FROM travel_segments ts WHERE ts.travel_request_id = tr.id)::INT AS segments_count
          FROM travel_requests tr
          LEFT JOIN departments d ON d.id = tr.traveler_department_id
          ${whereSQL}
@@ -232,10 +404,13 @@ export async function listPendingApprovals(req: Request, res: Response, next: Ne
     const sql = `
       SELECT tr.id, tr.request_code, tr.status, tr.urgency, tr.current_level,
              tr.request_for, tr.reason_of_travel, tr.traveler_full_name,
-             tr.booking_boarding, tr.booking_destination, tr.booking_departure_date,
-             tr.submitted_at,
+             tr.earliest_travel_date, tr.submitted_at,
              d.name AS department_name,
-             a.level AS my_level, a.approver_email AS my_email
+             a.level AS my_level, a.approver_email AS my_email,
+             (SELECT ts.from_location FROM travel_segments ts
+               WHERE ts.travel_request_id = tr.id ORDER BY ts.sequence_no LIMIT 1) AS first_from,
+             (SELECT ts.to_location   FROM travel_segments ts
+               WHERE ts.travel_request_id = tr.id ORDER BY ts.sequence_no DESC LIMIT 1) AS last_to
         FROM travel_requests tr
         JOIN travel_request_approvals a ON a.travel_request_id = tr.id
         LEFT JOIN departments d ON d.id = tr.traveler_department_id
@@ -261,14 +436,40 @@ export async function getRequest(req: Request, res: Response, next: NextFunction
       [req.params.id]
     );
     if (!r.rows[0]) return bad(res, 'NOT_FOUND', 'Travel request not found.', 404);
-    const approvals = await db.query(
-      `SELECT id, level, approver_email, status, acted_at, note
-         FROM travel_request_approvals
-        WHERE travel_request_id = $1
-        ORDER BY level ASC`,
-      [req.params.id]
-    );
-    res.json({ success: true, data: { ...r.rows[0], approvals: approvals.rows } });
+    const [approvals, segments, accommodations] = await Promise.all([
+      db.query(
+        `SELECT id, level, approver_email, status, acted_at, note
+           FROM travel_request_approvals
+          WHERE travel_request_id = $1
+          ORDER BY level ASC`,
+        [req.params.id]
+      ),
+      db.query(
+        `SELECT id, sequence_no, from_location, to_location, travel_date,
+                preferred_time, travel_mode, notes
+           FROM travel_segments
+          WHERE travel_request_id = $1
+          ORDER BY sequence_no ASC`,
+        [req.params.id]
+      ),
+      db.query(
+        `SELECT id, sequence_no, city, center, check_in_date, check_out_date,
+                hotel_requirement, hotel_requirement_other, notes
+           FROM accommodation_segments
+          WHERE travel_request_id = $1
+          ORDER BY sequence_no ASC`,
+        [req.params.id]
+      ),
+    ]);
+    res.json({
+      success: true,
+      data: {
+        ...r.rows[0],
+        approvals: approvals.rows,
+        travel_segments: segments.rows,
+        accommodation_segments: accommodations.rows,
+      },
+    });
   } catch (err) { next(err); }
 }
 
@@ -328,13 +529,19 @@ async function actOnRequest(
         [action === 'APPROVE' ? 'APPROVED' : 'REJECTED', note || null, userId, approval.id]
       );
 
-      // Advance or finalise
+      // Advance or finalise — use ACTUAL chain length (post Phase 5A filter)
+      // rather than the raw traveler_no_of_approvers, because Phase 5A drops
+      // blank slots and the submitter's own email from the chain.
       let newStatus: TravelRequestStatus;
       let newLevel: number = tr.current_level;
       if (action === 'REJECT') {
         newStatus = TravelRequestStatus.REJECTED;
       } else {
-        const totalLevels = tr.traveler_no_of_approvers;
+        const chainCount = await client.query(
+          `SELECT COUNT(*)::INT AS n FROM travel_request_approvals WHERE travel_request_id = $1`,
+          [tr.id]
+        );
+        const totalLevels = chainCount.rows[0]?.n ?? 0;
         if (tr.current_level >= totalLevels) {
           newStatus = TravelRequestStatus.APPROVED;
         } else {
@@ -347,7 +554,7 @@ async function actOnRequest(
         `UPDATE travel_requests
             SET status = $1, current_level = $2,
                 decided_at = CASE
-                  WHEN $1 IN ('APPROVED','REJECTED','AUTO_APPROVED') THEN NOW()
+                  WHEN $1::text IN ('APPROVED','REJECTED','AUTO_APPROVED') THEN NOW()
                   ELSE decided_at
                 END
           WHERE id = $3 RETURNING *`,

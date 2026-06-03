@@ -174,9 +174,9 @@ interface TravelRequestRow {
   request_code: string;
   status: string;
   traveler_full_name: string;
-  booking_boarding: string | null;
-  booking_destination: string | null;
-  booking_departure_date: string | null;
+  first_from: string | null;
+  last_to: string | null;
+  earliest_travel_date: string | null;
 }
 
 const TRAVEL_STATUS: Record<string, { label: string; className: string }> = {
@@ -454,13 +454,13 @@ export default function DashboardPage() {
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2">
                         <p className="text-xs font-semibold truncate" style={{ color: 'rgb(var(--content-primary))' }}>
-                          {trip.booking_boarding || '—'} → {trip.booking_destination || '—'}
+                          {trip.first_from || '—'} → {trip.last_to || '—'}
                         </p>
                       </div>
                       <p className="text-[10px] font-mono mt-0.5" style={{ color: 'rgb(var(--content-muted))' }}>
                         {trip.request_code}
-                        {trip.booking_departure_date && (
-                          <> · {new Date(trip.booking_departure_date).toLocaleDateString('en-IN', { day: '2-digit', month: 'short' })}</>
+                        {trip.earliest_travel_date && (
+                          <> · {new Date(trip.earliest_travel_date).toLocaleDateString('en-IN', { day: '2-digit', month: 'short' })}</>
                         )}
                       </p>
                       <p className="text-[10px] mt-0.5 truncate" style={{ color: 'rgb(var(--content-secondary))' }}>

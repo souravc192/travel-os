@@ -7,6 +7,7 @@ import {
 } from 'lucide-react';
 import {
   REASON_OF_TRAVEL_OPTIONS, RequestFor, RequestKind, UrgencyLevel, UserRole,
+  computeUrgency, SegmentTravelMode, HotelRequirement,
 } from '@travel-os/shared-types';
 import { useAuthStore } from '../../store/auth.store';
 import { memberApi, travelRequestApi } from '../../lib/api';
@@ -28,13 +29,17 @@ interface FormState {
   l1Email: string;
   l2Email: string;
   l3Email: string;
+  hodEmail: string;
+  cxoEmail: string;
   noOfApprovers: number;
+
+  // Expansion-only
+  expansionCenterId: string;
 
   // Type
   requestFor: RequestFor | '';
   requestKind: RequestKind;
   reservationType: 'TRAVEL' | 'STAY' | 'TRAVEL_AND_STAY';
-  needsStay: boolean;
   extensionStartDate: string;
   initialRequestId: string;
 
@@ -50,21 +55,26 @@ interface FormState {
     gender: string; dob: string;
   };
 
-  // Booking
-  bookingBoarding: string;
-  bookingVisitingReason: string;
-  bookingDestination: string;
-  bookingDepartureDate: string;
-  bookingPreferredTime: string;
-  bookingPurpose: string;
-  bookingRemarks: string;
-
-  // Stay
-  stayVisitingCenter: string;
-  stayLocation: string;
-  stayCheckIn: string;
-  stayCheckOut: string;
-  stayRemarks: string;
+  // Multi-segment travel (Phase 5B)
+  travelSegments: Array<{
+    fromLocation:  string;
+    toLocation:    string;
+    travelDate:    string;
+    preferredTime: string;
+    travelMode:    SegmentTravelMode;
+    notes:         string;
+  }>;
+  accommodationSegments: Array<{
+    city:                 string;
+    center:               string;
+    checkInDate:          string;
+    checkOutDate:         string;
+    hotelRequirement:     HotelRequirement;
+    hotelRequirementOther:string;
+    notes:                string;
+  }>;
+  purpose: string;
+  remarks: string;
 }
 
 const initial: FormState = {
@@ -75,18 +85,42 @@ const initial: FormState = {
   employeeCode: '',
   onBehalfCostCentre: '',
   fullName: '', email: '', designation: '', departmentName: '',
-  l1Email: '', l2Email: '', l3Email: '', noOfApprovers: 0,
+  l1Email: '', l2Email: '', l3Email: '', hodEmail: '', cxoEmail: '', noOfApprovers: 0,
+  expansionCenterId: '',
   requestFor: '', requestKind: RequestKind.NEW_REQUEST,
-  reservationType: 'TRAVEL', needsStay: false,
+  reservationType: 'TRAVEL',
   extensionStartDate: '', initialRequestId: '',
   studentDetails:   { noOfStudents: '', sheetLink: '', reason: '', remarks: '' },
   guestDetails:     { name: '', hostingDepartment: '', emailId: '', purpose: '', remarks: '' },
   newMemberDetails: { employeeName: '', candidateId: '', emailId: '', joiningDepartment: '', remarks: '' },
   eventDetails:     { eventName: '', noOfMembers: '', sheetLink: '', reason: '', remarks: '' },
   travelerDetails:  { name: '', employeeId: '', contactNo: '', emailId: '', gender: '', dob: '' },
-  bookingBoarding: '', bookingVisitingReason: '', bookingDestination: '',
-  bookingDepartureDate: '', bookingPreferredTime: '', bookingPurpose: '', bookingRemarks: '',
-  stayVisitingCenter: '', stayLocation: '', stayCheckIn: '', stayCheckOut: '', stayRemarks: '',
+  travelSegments: [{
+    fromLocation: '', toLocation: '', travelDate: '', preferredTime: '',
+    travelMode: SegmentTravelMode.FLIGHT, notes: '',
+  }],
+  accommodationSegments: [],
+  purpose: '', remarks: '',
+};
+
+// ─── Segment enum labels ───────────────────────────────────────
+const TRAVEL_MODE_LABEL: Record<SegmentTravelMode, string> = {
+  [SegmentTravelMode.FLIGHT]:     'Flight',
+  [SegmentTravelMode.TRAIN]:      'Train',
+  [SegmentTravelMode.BUS]:        'Bus',
+  [SegmentTravelMode.CAB]:        'Cab',
+  [SegmentTravelMode.SELF_DRIVE]: 'Self-Drive',
+  [SegmentTravelMode.TRAVELLER]:  'Tempo Traveller',
+  [SegmentTravelMode.OTHER]:      'Other',
+};
+const HOTEL_REQ_LABEL: Record<HotelRequirement, string> = {
+  [HotelRequirement.SHARING]:           'Sharing',
+  [HotelRequirement.NON_SHARING]:       'Non-Sharing',
+  [HotelRequirement.SINGLE]:            'Single',
+  [HotelRequirement.DOUBLE]:            'Double',
+  [HotelRequirement.SUITE]:             'Suite',
+  [HotelRequirement.SERVICE_APARTMENT]: 'Service Apartment',
+  [HotelRequirement.OTHER]:             'Other',
 };
 
 const REQUEST_FOR_CARDS: { value: RequestFor; label: string; icon: React.ElementType; sub: string }[] = [
@@ -116,6 +150,40 @@ function Field({ label, hint, error, children }: {
 
 const inputCx = "form-input w-full px-3 py-2.5 rounded-xl text-sm outline-none transition-colors focus:ring-2 focus:ring-[rgb(var(--accent)/0.35)]";
 
+// ─── Urgency badge (read-only, auto-computed) ─────────────────
+const URGENCY_META: Record<UrgencyLevel, { label: string; color: string; sub: string }> = {
+  [UrgencyLevel.NORMAL]:    { label: 'Normal',    color: 'var(--status-success)', sub: '≥ 4 days from today' },
+  [UrgencyLevel.URGENT]:    { label: 'Urgent',    color: 'var(--status-warning)', sub: '1–3 days from today' },
+  [UrgencyLevel.EMERGENCY]: { label: 'Emergency', color: 'var(--status-danger)',  sub: 'Same day · within 24h' },
+};
+function UrgencyBadge({ urgency, hasDeparture }: { urgency: UrgencyLevel; hasDeparture: boolean }) {
+  if (!hasDeparture) {
+    return (
+      <div className="px-3 py-2 rounded-xl text-xs font-medium"
+        style={{
+          background: 'rgb(var(--surface-elevated))',
+          color: 'rgb(var(--content-muted))',
+          border: '1px dashed rgb(var(--border-subtle))',
+        }}>
+        Pending departure date
+      </div>
+    );
+  }
+  const m = URGENCY_META[urgency];
+  return (
+    <div className="px-3 py-2 rounded-xl text-xs font-semibold inline-flex items-center gap-2"
+      style={{
+        background: `rgb(${m.color}/0.12)`,
+        color: `rgb(${m.color})`,
+        border: `1px solid rgb(${m.color}/0.35)`,
+      }}>
+      <span className="w-1.5 h-1.5 rounded-full" style={{ background: `rgb(${m.color})` }} />
+      {m.label}
+      <span className="opacity-60 font-normal">· {m.sub}</span>
+    </div>
+  );
+}
+
 function Section({ title, children, icon: Icon, elevated }: {
   title: string; children: React.ReactNode; icon?: React.ElementType; elevated?: boolean;
 }) {
@@ -144,6 +212,26 @@ export default function NewTravelRequestPage() {
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
 
+  // ── Hide designation from User + HOD (confidential) ──
+  const canSeeDesignation =
+    user?.role === UserRole.OWNER ||
+    user?.role === UserRole.ADMIN ||
+    user?.role === UserRole.TRAVEL_TEAM;
+
+  // ── Auto-compute urgency from the EARLIEST travel-segment date ──
+  const earliestTravelDate = useMemo(() => {
+    const dates = f.travelSegments.map((s) => s.travelDate).filter(Boolean).sort();
+    return dates[0] ?? '';
+  }, [f.travelSegments]);
+
+  useEffect(() => {
+    if (!earliestTravelDate) return;
+    const newUrgency = computeUrgency(new Date(), new Date(earliestTravelDate));
+    if (newUrgency !== f.urgency) {
+      setF((p) => ({ ...p, urgency: newUrgency }));
+    }
+  }, [earliestTravelDate]); // eslint-disable-line
+
   function patch<K extends keyof FormState>(key: K, val: FormState[K]) {
     setF((prev) => ({ ...prev, [key]: val }));
   }
@@ -161,7 +249,8 @@ export default function NewTravelRequestPage() {
     if (!code) {
       patch('fullName', ''); patch('email', ''); patch('designation', '');
       patch('departmentName', ''); patch('l1Email', ''); patch('l2Email', '');
-      patch('l3Email', ''); patch('noOfApprovers', 0);
+      patch('l3Email', ''); patch('hodEmail', ''); patch('cxoEmail', '');
+      patch('noOfApprovers', 0);
       setLookupErr(null);
       return;
     }
@@ -178,6 +267,8 @@ export default function NewTravelRequestPage() {
           l1Email: d.l1_email ?? '',
           l2Email: d.l2_email ?? '',
           l3Email: d.l3_email ?? '',
+          hodEmail: d.hod_email ?? '',
+          cxoEmail: d.cxo_email ?? '',
           noOfApprovers: Number(d.no_of_approvers ?? 0),
         }));
         setLookupErr(null);
@@ -185,7 +276,8 @@ export default function NewTravelRequestPage() {
         const apiErr = err as { response?: { data?: { error?: { message?: string } } } };
         setLookupErr(apiErr.response?.data?.error?.message ?? 'Could not find that Employee ID.');
         setF((p) => ({ ...p, fullName: '', email: '', designation: '',
-          departmentName: '', l1Email: '', l2Email: '', l3Email: '', noOfApprovers: 0 }));
+          departmentName: '', l1Email: '', l2Email: '', l3Email: '',
+          hodEmail: '', cxoEmail: '', noOfApprovers: 0 }));
       }
     }, 400);
     return () => clearTimeout(handle);
@@ -207,15 +299,13 @@ export default function NewTravelRequestPage() {
     return () => document.removeEventListener('mousedown', onPointerDown);
   }, [reasonOpen]);
 
-  const showStayBlock = (f.requestFor && f.reservationType === 'TRAVEL' && f.needsStay) ||
-                        f.reservationType === 'STAY' || f.reservationType === 'TRAVEL_AND_STAY';
-
   const showTypeOfRequest =
     f.requestFor === RequestFor.PW_MEMBER ||
     f.requestFor === RequestFor.GUEST ||
     f.requestFor === RequestFor.NEW_MEMBER;
 
   const isExtension = showTypeOfRequest && f.requestKind === RequestKind.EXTENSION;
+  const showStayBlock = f.accommodationSegments.length > 0;
 
   // ── Final validate ──
   function valid(): string | null {
@@ -226,12 +316,30 @@ export default function NewTravelRequestPage() {
     if (!f.requestFor) return 'Pick a Request For category.';
     if (isExtension && (!f.initialRequestId || !f.extensionStartDate))
       return 'Extension requires Initial Request ID and start date.';
-    if (!f.bookingDestination || !f.bookingDepartureDate)
-      return 'Booking destination & departure date are required.';
-    if (showStayBlock && (!f.stayCheckIn || !f.stayCheckOut))
-      return 'Stay check-in and check-out are required when a stay is needed.';
+    if (f.travelSegments.length === 0)
+      return 'Add at least one travel segment.';
+    for (let i = 0; i < f.travelSegments.length; i++) {
+      const s = f.travelSegments[i];
+      if (!s.fromLocation.trim() || !s.toLocation.trim() || !s.travelDate)
+        return `Travel segment ${i + 1}: from, to, and travel date are required.`;
+      if (s.fromLocation.trim().toLowerCase() === s.toLocation.trim().toLowerCase())
+        return `Travel segment ${i + 1}: from and to must differ.`;
+      if (i > 0 && s.travelDate < f.travelSegments[i - 1].travelDate)
+        return `Travel segment ${i + 1} has an earlier date than the previous one.`;
+    }
+    for (let i = 0; i < f.accommodationSegments.length; i++) {
+      const a = f.accommodationSegments[i];
+      if (!a.city.trim() || !a.checkInDate || !a.checkOutDate)
+        return `Accommodation ${i + 1}: city, check-in & check-out are required.`;
+      if (a.checkOutDate <= a.checkInDate)
+        return `Accommodation ${i + 1}: check-out must be after check-in.`;
+      if (a.hotelRequirement === HotelRequirement.OTHER && a.hotelRequirementOther.trim().length < 2)
+        return `Accommodation ${i + 1}: specify the requirement when choosing Other.`;
+    }
     if (f.submittedOnBehalf && !f.onBehalfCostCentre.trim())
       return 'On-behalf cost centre is required.';
+    if (f.departmentName === 'Expansion' && !f.expansionCenterId.trim())
+      return 'Center ID is required for Expansion department travel.';
     return null;
   }
 
@@ -251,7 +359,7 @@ export default function NewTravelRequestPage() {
         requestFor: f.requestFor,
         requestKind: showTypeOfRequest ? f.requestKind : RequestKind.NEW_REQUEST,
         reservationType: f.reservationType,
-        needsStay: f.needsStay,
+        needsStay: f.accommodationSegments.length > 0,
         extensionStartDate: isExtension ? f.extensionStartDate : null,
         initialRequestId: isExtension ? f.initialRequestId : null,
         studentDetails:    f.requestFor === RequestFor.STUDENT    ? f.studentDetails    : null,
@@ -259,18 +367,28 @@ export default function NewTravelRequestPage() {
         newMemberDetails:  f.requestFor === RequestFor.NEW_MEMBER ? f.newMemberDetails  : null,
         eventDetails:      f.requestFor === RequestFor.EVENT      ? f.eventDetails      : null,
         travelerDetails:   f.requestFor !== RequestFor.PW_MEMBER  ? f.travelerDetails   : null,
-        bookingBoarding:       f.bookingBoarding,
-        bookingVisitingReason: f.bookingVisitingReason,
-        bookingDestination:    f.bookingDestination,
-        bookingDepartureDate:  f.bookingDepartureDate,
-        bookingPreferredTime:  f.bookingPreferredTime,
-        bookingPurpose:        f.bookingPurpose,
-        bookingRemarks:        f.bookingRemarks,
-        stayVisitingCenter: showStayBlock ? f.stayVisitingCenter : null,
-        stayLocation:       showStayBlock ? f.stayLocation       : null,
-        stayCheckIn:        showStayBlock ? f.stayCheckIn        : null,
-        stayCheckOut:       showStayBlock ? f.stayCheckOut       : null,
-        stayRemarks:        showStayBlock ? f.stayRemarks        : null,
+        travelSegments: f.travelSegments.map((s) => ({
+          fromLocation: s.fromLocation.trim(),
+          toLocation:   s.toLocation.trim(),
+          travelDate:   s.travelDate,
+          travelMode:   s.travelMode,
+          preferredTime: s.preferredTime.trim() || null,
+          notes:         s.notes.trim()         || null,
+        })),
+        accommodationSegments: f.accommodationSegments.map((a) => ({
+          city:            a.city.trim(),
+          center:          a.center.trim() || null,
+          checkInDate:     a.checkInDate,
+          checkOutDate:    a.checkOutDate,
+          hotelRequirement:      a.hotelRequirement,
+          hotelRequirementOther: a.hotelRequirement === HotelRequirement.OTHER
+                                   ? a.hotelRequirementOther.trim()
+                                   : null,
+          notes:           a.notes.trim() || null,
+        })),
+        purpose:           f.purpose.trim() || null,
+        remarks:           f.remarks.trim() || null,
+        expansionCenterId: f.departmentName === 'Expansion' ? f.expansionCenterId.trim() : null,
       });
       navigate(`/travel/requests/${res.data.data.id}`);
     } catch (err: unknown) {
@@ -323,22 +441,11 @@ export default function NewTravelRequestPage() {
         </Field>
 
         <div className="grid grid-cols-2 gap-3">
-          <Field label="Urgency">
-            <div className="flex gap-2">
-              {[
-                { v: UrgencyLevel.NORMAL, label: 'Normal · 3+ days' },
-                { v: UrgencyLevel.URGENT, label: 'Urgent · ≤ 3 days' },
-              ].map((o) => (
-                <button key={o.v} type="button" onClick={() => patch('urgency', o.v)}
-                  className="flex-1 px-3 py-2 rounded-xl text-xs font-medium"
-                  style={{
-                    background: f.urgency === o.v ? 'rgb(var(--accent))' : 'rgb(var(--surface-elevated))',
-                    color: f.urgency === o.v ? '#fff' : 'rgb(var(--content-secondary))',
-                  }}>
-                  {o.label}
-                </button>
-              ))}
-            </div>
+          <Field label="Urgency"
+            hint={earliestTravelDate
+              ? 'Auto-computed from your earliest travel date.'
+              : 'Add at least one travel segment date below to compute urgency.'}>
+            <UrgencyBadge urgency={f.urgency} hasDeparture={Boolean(earliestTravelDate)} />
           </Field>
 
           <Field label="Reason of Travel">
@@ -421,12 +528,13 @@ export default function NewTravelRequestPage() {
           <motion.div initial={{ opacity: 0, y: 4 }} animate={{ opacity: 1, y: 0 }}
             className="grid grid-cols-2 gap-2 p-3 rounded-xl"
             style={{ background: 'rgb(var(--surface-elevated))' }}>
-            {[
+            {([
               ['Full Name', f.fullName],
               ['Email', f.email],
-              ['Designation', f.designation],
+              // Designation is confidential — only Owner/Admin/Travel Team see it
+              ...(canSeeDesignation ? [['Designation', f.designation]] : []),
               ['Department', f.departmentName],
-            ].map(([label, val]) => (
+            ] as Array<[string, string]>).map(([label, val]) => (
               <div key={label}>
                 <p className="text-[10px] uppercase tracking-wide"
                   style={{ color: 'rgb(var(--content-muted))' }}>{label}</p>
@@ -437,24 +545,47 @@ export default function NewTravelRequestPage() {
           </motion.div>
         )}
 
-        {f.noOfApprovers > 0 && (
-          <div className="p-3 rounded-xl"
-            style={{ background: 'rgb(var(--accent-subtle))' }}>
-            <p className="text-[10px] uppercase tracking-wide mb-1"
-              style={{ color: 'rgb(var(--accent-text))' }}>Approval Chain ({f.noOfApprovers} level{f.noOfApprovers > 1 ? 's' : ''})</p>
-            <div className="flex items-center gap-2 flex-wrap">
-              {[f.l1Email, f.l2Email, f.l3Email].slice(0, f.noOfApprovers).map((e, i) => (
-                <span key={i} className="text-[11px] font-mono px-2 py-0.5 rounded"
-                  style={{
-                    background: 'rgb(var(--surface-base))',
-                    color: 'rgb(var(--content-primary))',
-                  }}>
-                  L{i + 1}: {e || '—'}
-                </span>
-              ))}
+        {f.noOfApprovers > 0 && (() => {
+          // Mirror the backend chain builder — middle slot depends on urgency,
+          // blanks and submitter's own email get dropped.
+          const middleEmail =
+            f.urgency === UrgencyLevel.URGENT    ? f.hodEmail :
+            f.urgency === UrgencyLevel.EMERGENCY ? f.cxoEmail :
+                                                   f.l2Email;
+          const middleLabel =
+            f.urgency === UrgencyLevel.URGENT    ? 'HOD' :
+            f.urgency === UrgencyLevel.EMERGENCY ? 'CXO' :
+                                                   'L2';
+          const me = (user?.email ?? '').toLowerCase();
+          const chain: Array<{ label: string; email: string }> = [
+            { label: 'L1',          email: f.l1Email },
+            { label: middleLabel,   email: middleEmail },
+            { label: 'L3',          email: f.l3Email },
+          ].map(c => ({ ...c, email: (c.email ?? '').toLowerCase() }))
+           .filter(c => c.email.length > 0 && c.email !== me);
+
+          if (chain.length === 0) return null;
+          return (
+            <div className="p-3 rounded-xl"
+              style={{ background: 'rgb(var(--accent-subtle))' }}>
+              <p className="text-[10px] uppercase tracking-wide mb-1"
+                style={{ color: 'rgb(var(--accent-text))' }}>
+                Approval Chain ({chain.length} step{chain.length > 1 ? 's' : ''})
+              </p>
+              <div className="flex items-center gap-2 flex-wrap">
+                {chain.map((c, i) => (
+                  <span key={i} className="text-[11px] font-mono px-2 py-0.5 rounded"
+                    style={{
+                      background: 'rgb(var(--surface-base))',
+                      color: 'rgb(var(--content-primary))',
+                    }}>
+                    {i + 1}. {c.label}: {c.email}
+                  </span>
+                ))}
+              </div>
             </div>
-          </div>
-        )}
+          );
+        })()}
         {f.noOfApprovers === 0 && f.fullName && (
           <div className="p-3 rounded-xl flex items-center gap-2"
             style={{ background: 'rgb(var(--status-success)/0.12)' }}>
@@ -469,7 +600,18 @@ export default function NewTravelRequestPage() {
           <Field label="Cost Centre (acting on behalf)">
             <input value={f.onBehalfCostCentre}
               onChange={(e) => patch('onBehalfCostCentre', e.target.value)}
-              className={inputCx}              placeholder="Cost centre code" />
+              className={inputCx} placeholder="Cost centre code" />
+          </Field>
+        )}
+
+        {/* Expansion department → mandatory Center ID */}
+        {f.departmentName === 'Expansion' && (
+          <Field label="Center ID *"
+            hint="Required for Expansion department — identifies the centre being visited.">
+            <input value={f.expansionCenterId}
+              onChange={(e) => patch('expansionCenterId', e.target.value)}
+              className={inputCx}
+              placeholder="e.g. PW-DEL-042" />
           </Field>
         )}
       </Section>
@@ -534,33 +676,16 @@ export default function NewTravelRequestPage() {
         )}
 
         {f.requestFor && (
-          <div className="grid grid-cols-2 gap-3 mt-1">
-            <Field label="Reservation">
-              <select value={f.reservationType}
-                onChange={(e) => patch('reservationType', e.target.value as FormState['reservationType'])}
-                className={inputCx}>
-                <option value="TRAVEL">Travel</option>
-                <option value="STAY">Stay</option>
-                <option value="TRAVEL_AND_STAY">Travel & Stay</option>
-              </select>
-            </Field>
-            {f.reservationType !== 'STAY' && (
-              <Field label="Need of Stay">
-                <div className="flex gap-2">
-                  {[true, false].map((b) => (
-                    <button key={String(b)} type="button" onClick={() => patch('needsStay', b)}
-                      className="flex-1 px-3 py-2 rounded-xl text-xs font-medium"
-                      style={{
-                        background: f.needsStay === b ? 'rgb(var(--accent))' : 'rgb(var(--surface-elevated))',
-                        color: f.needsStay === b ? '#fff' : 'rgb(var(--content-secondary))',
-                      }}>
-                      {b ? 'Yes' : 'No'}
-                    </button>
-                  ))}
-                </div>
-              </Field>
-            )}
-          </div>
+          <Field label="Reservation Type"
+            hint="Determines what segments you'll need to add below.">
+            <select value={f.reservationType}
+              onChange={(e) => patch('reservationType', e.target.value as FormState['reservationType'])}
+              className={inputCx}>
+              <option value="TRAVEL">Travel only</option>
+              <option value="STAY">Stay only</option>
+              <option value="TRAVEL_AND_STAY">Travel & Stay</option>
+            </select>
+          </Field>
         )}
       </Section>
 
@@ -731,80 +856,260 @@ export default function NewTravelRequestPage() {
         </Section>
       )}
 
-      {/* ── 6. Booking Details ─────────────────────────────────── */}
-      {f.requestFor && f.reservationType !== 'STAY' && (
-        <Section title="Booking Details" icon={Plane}>
-          <div className="grid grid-cols-2 gap-3">
-            <Field label="Boarding (origin)">
-              <input value={f.bookingBoarding}
-                onChange={(e) => patch('bookingBoarding', e.target.value)}
-                placeholder="e.g. Delhi"
-                className={inputCx} />
-            </Field>
-            <Field label="Destination">
-              <input value={f.bookingDestination}
-                onChange={(e) => patch('bookingDestination', e.target.value)}
-                placeholder="e.g. Mumbai"
-                className={inputCx} />
-            </Field>
-            <Field label="Departure Date">
-              <input type="date" value={f.bookingDepartureDate}
-                onChange={(e) => patch('bookingDepartureDate', e.target.value)}
-                className={inputCx} />
-            </Field>
-            <Field label="Preferred Time">
-              <input value={f.bookingPreferredTime}
-                onChange={(e) => patch('bookingPreferredTime', e.target.value)}
-                placeholder="e.g. After 7 PM"
-                className={inputCx} />
-            </Field>
-          </div>
-          <Field label="Visiting Reason">
-            <input value={f.bookingVisitingReason}
-              onChange={(e) => patch('bookingVisitingReason', e.target.value)}
-              className={inputCx} />
-          </Field>
-          <Field label="Purpose">
-            <textarea rows={2} value={f.bookingPurpose}
-              onChange={(e) => patch('bookingPurpose', e.target.value)}
-              className={inputCx} />
-          </Field>
-          <Field label="Remarks">
-            <textarea rows={2} value={f.bookingRemarks}
-              onChange={(e) => patch('bookingRemarks', e.target.value)}
-              className={inputCx} />
-          </Field>
+      {/* ── 6. Travel Segments (dynamic rows) ──────────────────── */}
+      {f.requestFor && (
+        <Section title="Travel Segments" icon={Plane}>
+          <p className="text-[11px]" style={{ color: 'rgb(var(--content-muted))' }}>
+            Add a row for every leg of the journey. For a round trip, add two
+            segments (Delhi → Mumbai, then Mumbai → Delhi).
+          </p>
+          {f.travelSegments.map((s, idx) => (
+            <div key={idx} className="rounded-xl p-3 space-y-3"
+              style={{
+                background: 'rgb(var(--surface-elevated))',
+                border: '1px solid rgb(var(--border-subtle))',
+              }}>
+              <div className="flex items-center justify-between">
+                <span className="text-[10px] uppercase tracking-wider font-semibold"
+                  style={{ color: 'rgb(var(--content-muted))' }}>
+                  Segment {idx + 1}
+                </span>
+                {f.travelSegments.length > 1 && (
+                  <button type="button"
+                    onClick={() => setF((p) => ({
+                      ...p,
+                      travelSegments: p.travelSegments.filter((_, i) => i !== idx),
+                    }))}
+                    className="text-[11px] px-2 py-0.5 rounded"
+                    style={{
+                      background: 'rgb(var(--status-danger)/0.12)',
+                      color: 'rgb(var(--status-danger))',
+                    }}>
+                    × Remove
+                  </button>
+                )}
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <Field label="From">
+                  <input value={s.fromLocation}
+                    onChange={(e) => setF((p) => ({
+                      ...p,
+                      travelSegments: p.travelSegments.map((row, i) =>
+                        i === idx ? { ...row, fromLocation: e.target.value } : row),
+                    }))}
+                    placeholder="e.g. Delhi" className={inputCx} />
+                </Field>
+                <Field label="To">
+                  <input value={s.toLocation}
+                    onChange={(e) => setF((p) => ({
+                      ...p,
+                      travelSegments: p.travelSegments.map((row, i) =>
+                        i === idx ? { ...row, toLocation: e.target.value } : row),
+                    }))}
+                    placeholder="e.g. Mumbai" className={inputCx} />
+                </Field>
+                <Field label="Travel Date">
+                  <input type="date" value={s.travelDate}
+                    onChange={(e) => setF((p) => ({
+                      ...p,
+                      travelSegments: p.travelSegments.map((row, i) =>
+                        i === idx ? { ...row, travelDate: e.target.value } : row),
+                    }))}
+                    className={inputCx} />
+                </Field>
+                <Field label="Travel Mode">
+                  <select value={s.travelMode}
+                    onChange={(e) => setF((p) => ({
+                      ...p,
+                      travelSegments: p.travelSegments.map((row, i) =>
+                        i === idx ? { ...row, travelMode: e.target.value as SegmentTravelMode } : row),
+                    }))}
+                    className={inputCx}>
+                    {Object.values(SegmentTravelMode).map((m) => (
+                      <option key={m} value={m}>{TRAVEL_MODE_LABEL[m]}</option>
+                    ))}
+                  </select>
+                </Field>
+                <Field label="Preferred Time (optional)">
+                  <input value={s.preferredTime}
+                    onChange={(e) => setF((p) => ({
+                      ...p,
+                      travelSegments: p.travelSegments.map((row, i) =>
+                        i === idx ? { ...row, preferredTime: e.target.value } : row),
+                    }))}
+                    placeholder="e.g. After 7 PM" className={inputCx} />
+                </Field>
+                <Field label="Notes (optional)">
+                  <input value={s.notes}
+                    onChange={(e) => setF((p) => ({
+                      ...p,
+                      travelSegments: p.travelSegments.map((row, i) =>
+                        i === idx ? { ...row, notes: e.target.value } : row),
+                    }))}
+                    className={inputCx} />
+                </Field>
+              </div>
+            </div>
+          ))}
+          <button type="button"
+            onClick={() => setF((p) => ({
+              ...p,
+              travelSegments: [
+                ...p.travelSegments,
+                { fromLocation: '', toLocation: '', travelDate: '', preferredTime: '',
+                  travelMode: SegmentTravelMode.FLIGHT, notes: '' },
+              ],
+            }))}
+            className="w-full px-3 py-2 rounded-xl text-xs font-semibold"
+            style={{
+              background: 'rgb(var(--accent-subtle))',
+              color:      'rgb(var(--accent-text))',
+              border:     '1px dashed rgb(var(--accent))',
+            }}>
+            + Add Travel Segment
+          </button>
         </Section>
       )}
 
-      {/* ── 7. Stay Booking Details ─────────────────────────────── */}
-      {showStayBlock && (
-        <Section title="Stay Booking Details" icon={Hotel}>
-          <div className="grid grid-cols-2 gap-3">
-            <Field label="Visiting Center">
-              <input value={f.stayVisitingCenter}
-                onChange={(e) => patch('stayVisitingCenter', e.target.value)}
-                className={inputCx} />
-            </Field>
-            <Field label="Location">
-              <input value={f.stayLocation}
-                onChange={(e) => patch('stayLocation', e.target.value)}
-                className={inputCx} />
-            </Field>
-            <Field label="Check-In Date">
-              <input type="date" value={f.stayCheckIn}
-                onChange={(e) => patch('stayCheckIn', e.target.value)}
-                className={inputCx} />
-            </Field>
-            <Field label="Check-Out Date">
-              <input type="date" value={f.stayCheckOut}
-                onChange={(e) => patch('stayCheckOut', e.target.value)}
-                className={inputCx} />
-            </Field>
-          </div>
-          <Field label="Remarks">
-            <textarea rows={2} value={f.stayRemarks}
-              onChange={(e) => patch('stayRemarks', e.target.value)}
+      {/* ── 7. Accommodation Segments (optional, dynamic rows) ── */}
+      {f.requestFor && (
+        <Section title="Accommodation Segments" icon={Hotel}>
+          {f.accommodationSegments.length === 0 ? (
+            <p className="text-[11px]" style={{ color: 'rgb(var(--content-muted))' }}>
+              No stays added. Click below to add a hotel / service apartment requirement.
+            </p>
+          ) : (
+            f.accommodationSegments.map((a, idx) => (
+              <div key={idx} className="rounded-xl p-3 space-y-3"
+                style={{
+                  background: 'rgb(var(--surface-elevated))',
+                  border: '1px solid rgb(var(--border-subtle))',
+                }}>
+                <div className="flex items-center justify-between">
+                  <span className="text-[10px] uppercase tracking-wider font-semibold"
+                    style={{ color: 'rgb(var(--content-muted))' }}>
+                    Stay {idx + 1}
+                  </span>
+                  <button type="button"
+                    onClick={() => setF((p) => ({
+                      ...p,
+                      accommodationSegments: p.accommodationSegments.filter((_, i) => i !== idx),
+                    }))}
+                    className="text-[11px] px-2 py-0.5 rounded"
+                    style={{
+                      background: 'rgb(var(--status-danger)/0.12)',
+                      color: 'rgb(var(--status-danger))',
+                    }}>
+                    × Remove
+                  </button>
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <Field label="City">
+                    <input value={a.city}
+                      onChange={(e) => setF((p) => ({
+                        ...p,
+                        accommodationSegments: p.accommodationSegments.map((row, i) =>
+                          i === idx ? { ...row, city: e.target.value } : row),
+                      }))}
+                      placeholder="e.g. Mumbai" className={inputCx} />
+                  </Field>
+                  <Field label="Center (optional)">
+                    <input value={a.center}
+                      onChange={(e) => setF((p) => ({
+                        ...p,
+                        accommodationSegments: p.accommodationSegments.map((row, i) =>
+                          i === idx ? { ...row, center: e.target.value } : row),
+                      }))}
+                      placeholder="Visiting centre / branch" className={inputCx} />
+                  </Field>
+                  <Field label="Check-In Date">
+                    <input type="date" value={a.checkInDate}
+                      onChange={(e) => setF((p) => ({
+                        ...p,
+                        accommodationSegments: p.accommodationSegments.map((row, i) =>
+                          i === idx ? { ...row, checkInDate: e.target.value } : row),
+                      }))}
+                      className={inputCx} />
+                  </Field>
+                  <Field label="Check-Out Date">
+                    <input type="date" value={a.checkOutDate}
+                      onChange={(e) => setF((p) => ({
+                        ...p,
+                        accommodationSegments: p.accommodationSegments.map((row, i) =>
+                          i === idx ? { ...row, checkOutDate: e.target.value } : row),
+                      }))}
+                      className={inputCx} />
+                  </Field>
+                  <Field label="Hotel Requirement">
+                    <select value={a.hotelRequirement}
+                      onChange={(e) => setF((p) => ({
+                        ...p,
+                        accommodationSegments: p.accommodationSegments.map((row, i) =>
+                          i === idx ? { ...row, hotelRequirement: e.target.value as HotelRequirement } : row),
+                      }))}
+                      className={inputCx}>
+                      {Object.values(HotelRequirement).map((h) => (
+                        <option key={h} value={h}>{HOTEL_REQ_LABEL[h]}</option>
+                      ))}
+                    </select>
+                  </Field>
+                  {a.hotelRequirement === HotelRequirement.OTHER && (
+                    <Field label="Specify Requirement">
+                      <input value={a.hotelRequirementOther}
+                        onChange={(e) => setF((p) => ({
+                          ...p,
+                          accommodationSegments: p.accommodationSegments.map((row, i) =>
+                            i === idx ? { ...row, hotelRequirementOther: e.target.value } : row),
+                        }))}
+                        className={inputCx} />
+                    </Field>
+                  )}
+                </div>
+                <Field label="Notes (optional)">
+                  <input value={a.notes}
+                    onChange={(e) => setF((p) => ({
+                      ...p,
+                      accommodationSegments: p.accommodationSegments.map((row, i) =>
+                        i === idx ? { ...row, notes: e.target.value } : row),
+                    }))}
+                    className={inputCx} />
+                </Field>
+              </div>
+            ))
+          )}
+          <button type="button"
+            onClick={() => setF((p) => ({
+              ...p,
+              accommodationSegments: [
+                ...p.accommodationSegments,
+                { city: '', center: '', checkInDate: '', checkOutDate: '',
+                  hotelRequirement: HotelRequirement.NON_SHARING,
+                  hotelRequirementOther: '', notes: '' },
+              ],
+            }))}
+            className="w-full px-3 py-2 rounded-xl text-xs font-semibold"
+            style={{
+              background: 'rgb(var(--accent-subtle))',
+              color:      'rgb(var(--accent-text))',
+              border:     '1px dashed rgb(var(--accent))',
+            }}>
+            + Add Accommodation
+          </button>
+        </Section>
+      )}
+
+      {/* ── 8. Purpose & Remarks (request-level) ──────────────── */}
+      {f.requestFor && (
+        <Section title="Purpose & Remarks" icon={Building2}>
+          <Field label="Purpose of trip">
+            <textarea rows={2} value={f.purpose}
+              onChange={(e) => patch('purpose', e.target.value)}
+              placeholder="Why is this trip needed?"
+              className={inputCx} />
+          </Field>
+          <Field label="Remarks (optional)">
+            <textarea rows={2} value={f.remarks}
+              onChange={(e) => patch('remarks', e.target.value)}
               className={inputCx} />
           </Field>
         </Section>

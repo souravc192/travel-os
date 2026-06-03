@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import {
   Package, Search, ArrowRight, Plane, Train, Bus, Car, Hotel, Box,
-  CheckCircle2, Clock, XCircle, RefreshCw,
+  CheckCircle2, Clock, XCircle, RefreshCw, Truck, Presentation,
 } from 'lucide-react';
 import { bookingApi } from '../../lib/api';
 import { BookingStatus, BookingType } from '@travel-os/shared-types';
@@ -22,7 +22,13 @@ interface Row {
 }
 
 const TYPE_ICON: Record<string, React.ElementType> = {
-  FLIGHT: Plane, TRAIN: Train, BUS: Bus, CAB: Car, HOTEL: Hotel, OTHER: Box,
+  FLIGHT: Plane, TRAIN: Train, BUS: Bus, CAB: Car, TRAVELLER: Truck,
+  HOTEL: Hotel, CONFERENCE_HALL: Presentation, OTHER: Box,
+};
+const TYPE_LABEL: Record<string, string> = {
+  FLIGHT: 'Flight', TRAIN: 'Train', BUS: 'Bus', CAB: 'Cab',
+  TRAVELLER: 'Tempo Traveller',
+  HOTEL: 'Hotel', CONFERENCE_HALL: 'Conference Hall', OTHER: 'Other',
 };
 const STATUS_META: Record<string, { label: string; color: string; icon: React.ElementType }> = {
   PENDING:     { label: 'Pending',     color: 'var(--status-warning)', icon: Clock },
@@ -143,7 +149,7 @@ export default function BookingsListPage() {
                     </span>
                     <span className="text-[10px] uppercase tracking-wide px-1.5 py-0.5 rounded"
                       style={{ background: 'rgb(var(--surface-elevated))', color: 'rgb(var(--content-muted))' }}>
-                      {r.bookingType}
+                      {TYPE_LABEL[r.bookingType] ?? r.bookingType}
                     </span>
                   </div>
                   <p className="text-[11px] mt-0.5 font-mono"

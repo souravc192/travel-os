@@ -3,14 +3,16 @@ import { motion, AnimatePresence } from 'framer-motion';
 import {
   Package, Plus, CheckCircle2, XCircle, RefreshCw, FileText, Edit3,
   Plane, Hotel, Train, Bus, Car, Box, Upload, ExternalLink, Clock,
+  Truck, Presentation,
 } from 'lucide-react';
-import { bookingApi } from '../../../lib/api';
-import BookingFormModal from './BookingFormModal';
+import { bookingApi, openAuthPdf } from '../../../lib/api';
+import BookingFormModal, { type SegmentOption } from './BookingFormModal';
 
 interface Booking {
   id: string;
   travelRequestId: string;
-  bookingType: 'FLIGHT' | 'TRAIN' | 'BUS' | 'CAB' | 'HOTEL' | 'OTHER';
+  bookingType: 'FLIGHT' | 'TRAIN' | 'BUS' | 'CAB' | 'TRAVELLER'
+              | 'HOTEL' | 'CONFERENCE_HALL' | 'OTHER';
   bookingStatus: 'PENDING' | 'CONFIRMED' | 'CANCELLED' | 'RESCHEDULED';
   vendorName: string;
   amount: number;
@@ -29,10 +31,20 @@ interface Booking {
   consumedAmount: number;
   confirmedAt: string | null;
   cancelledAt: string | null;
+  venueCapacity: number | null;
+  travelSegmentId: string | null;
+  accommodationSegmentId: string | null;
 }
 
 const TYPE_ICON: Record<Booking['bookingType'], React.ElementType> = {
-  FLIGHT: Plane, TRAIN: Train, BUS: Bus, CAB: Car, HOTEL: Hotel, OTHER: Box,
+  FLIGHT: Plane, TRAIN: Train, BUS: Bus, CAB: Car, TRAVELLER: Truck,
+  HOTEL: Hotel, CONFERENCE_HALL: Presentation, OTHER: Box,
+};
+
+const TYPE_LABEL: Record<Booking['bookingType'], string> = {
+  FLIGHT: 'Flight', TRAIN: 'Train', BUS: 'Bus', CAB: 'Cab',
+  TRAVELLER: 'Tempo Traveller',
+  HOTEL: 'Hotel', CONFERENCE_HALL: 'Conference Hall', OTHER: 'Other',
 };
 
 const STATUS_META: Record<Booking['bookingStatus'], { label: string; color: string; icon: React.ElementType }> = {
@@ -58,9 +70,10 @@ function fmtDate(d: string | null) {
 interface Props {
   requestId: string;
   canEdit:   boolean;
+  segments?: SegmentOption[];
 }
 
-export default function BookingsPanel({ requestId, canEdit }: Props) {
+export default function BookingsPanel({ requestId, canEdit, segments }: Props) {
   const [bookings, setBookings] = useState<Booking[]>([]);
   const [loading, setLoading]   = useState(true);
   const [busy, setBusy]         = useState<string | null>(null);
@@ -208,14 +221,23 @@ Max: ${inr(b.amount)}`,
                           </span>
                           <span className="text-[10px] uppercase tracking-wide px-1.5 py-0.5 rounded"
                             style={{ background: 'rgb(var(--surface-base))', color: 'rgb(var(--content-muted))' }}>
-                            {b.bookingType}
+                            {TYPE_LABEL[b.bookingType] ?? b.bookingType}
                           </span>
+                          {b.venueCapacity != null && (
+                            <span className="text-[10px] uppercase tracking-wide px-1.5 py-0.5 rounded"
+                              style={{
+                                background: 'rgb(var(--status-info)/0.12)',
+                                color: 'rgb(var(--status-info))',
+                              }}>
+                              cap {b.venueCapacity}
+                            </span>
+                          )}
                         </div>
                         <p className="text-[11px] mt-1 font-mono"
                           style={{ color: 'rgb(var(--content-secondary))' }}>
                           {b.bookingReference ? `Ref: ${b.bookingReference} · ` : ''}
                           Booked {fmtDate(b.bookingDate)}
-                          {b.bookingType === 'HOTEL' && b.checkInDate
+                          {(b.bookingType === 'HOTEL' || b.bookingType === 'CONFERENCE_HALL') && b.checkInDate
                             ? ` · ${fmtDate(b.checkInDate)} → ${fmtDate(b.checkOutDate)}`
                             : b.departureAt
                             ? ` · departs ${new Date(b.departureAt).toLocaleDateString('en-IN', { day: '2-digit', month: 'short' })}`
@@ -253,7 +275,7 @@ Max: ${inr(b.amount)}`,
                     {canEdit && (
                       <div className="flex items-center justify-end gap-1 mt-2 flex-wrap">
                         {b.invoicePath ? (
-                          <a href={`/api/v1/bookings/${b.id}/invoice`} target="_blank" rel="noreferrer"
+                          <button onClick={() => openAuthPdf(bookingApi.invoiceUrl(b.id))}
                             className="px-2 py-1 rounded-lg text-[11px] font-semibold inline-flex items-center gap-1"
                             style={{
                               background: 'rgb(var(--status-info)/0.12)',
@@ -261,7 +283,7 @@ Max: ${inr(b.amount)}`,
                             }}>
                             <FileText className="w-3 h-3" /> Invoice
                             <ExternalLink className="w-2.5 h-2.5" />
-                          </a>
+                          </button>
                         ) : (
                           <label className="px-2 py-1 rounded-lg text-[11px] font-semibold cursor-pointer inline-flex items-center gap-1"
                             style={{
@@ -338,6 +360,7 @@ Max: ${inr(b.amount)}`,
         <BookingFormModal
           requestId={requestId}
           editing={modal.edit ?? null}
+          segments={segments}
           onClose={() => setModal({ open: false })}
           onSaved={() => { setModal({ open: false }); load(); }}
         />
