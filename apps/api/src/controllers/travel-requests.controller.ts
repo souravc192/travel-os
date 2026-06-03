@@ -554,11 +554,11 @@ async function actOnRequest(
         `UPDATE travel_requests
             SET status = $1, current_level = $2,
                 decided_at = CASE
-                  WHEN $1::text IN ('APPROVED','REJECTED','AUTO_APPROVED') THEN NOW()
+                  WHEN $4 IN ('APPROVED','REJECTED','AUTO_APPROVED') THEN NOW()
                   ELSE decided_at
                 END
           WHERE id = $3 RETURNING *`,
-        [newStatus, newLevel, tr.id]
+        [newStatus, newLevel, tr.id, String(newStatus)]
       );
       return upd.rows[0];
     });
