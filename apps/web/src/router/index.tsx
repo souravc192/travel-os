@@ -20,6 +20,10 @@ const BookingsListPage        = lazy(() => import('../pages/bookings/BookingsLis
 const PolicyListPage          = lazy(() => import('../pages/policy/PolicyListPage'));
 const PolicyDetailPage        = lazy(() => import('../pages/policy/PolicyDetailPage'));
 const PolicyAdminPage         = lazy(() => import('../pages/admin/PolicyAdminPage'));
+const ReimbursementsListPage      = lazy(() => import('../pages/reimbursement/ReimbursementsListPage'));
+const NewReimbursementPage        = lazy(() => import('../pages/reimbursement/NewReimbursementPage'));
+const ReimbursementDetailPage     = lazy(() => import('../pages/reimbursement/ReimbursementDetailPage'));
+const ReimbursementCategoriesPage = lazy(() => import('../pages/admin/ReimbursementCategoriesAdminPage'));
 const NotFoundPage            = lazy(() => import('../pages/NotFoundPage'));
 
 // ─── Auth Initializer (runs on every app load) ────────────────
@@ -142,6 +146,12 @@ const router = createBrowserRouter([
               { path: 'policy',         element: <PolicyListPage /> },
               { path: 'policy/:id',     element: <PolicyDetailPage /> },
 
+              // Reimbursements (all authenticated users)
+              { path: 'reimbursements',           element: <ReimbursementsListPage /> },
+              { path: 'reimbursements/new',       element: <NewReimbursementPage /> },
+              { path: 'reimbursements/:id',       element: <ReimbursementDetailPage /> },
+              { path: 'reimbursements/:id/edit',  element: <NewReimbursementPage /> },
+
               // Travel Team routes (bookings live here too)
               {
                 element: <RequireAuth allowedRoles={[UserRole.TRAVEL_TEAM, UserRole.OWNER, UserRole.ADMIN]} />,
@@ -159,6 +169,7 @@ const router = createBrowserRouter([
                   { path: 'analytics',        element: <PageLoader /> },
                   { path: 'admin/members',    element: <MembersAdminPage /> },
                   { path: 'admin/policies',   element: <PolicyAdminPage /> },
+                  { path: 'admin/reimbursement-categories', element: <ReimbursementCategoriesPage /> },
                 ],
               },
 

@@ -4,7 +4,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import {
   LayoutDashboard, Plane, CheckSquare, Building2, Receipt,
   BarChart3, Users, Settings, Bell, Search, LogOut, ChevronRight,
-  Wallet, MapPin, Package, Menu, X, Sparkles, Moon, Sun, BookOpen,
+  Wallet, MapPin, Package, Menu, X, Sparkles, Moon, Sun, BookOpen, Tag,
 } from 'lucide-react';
 import { useAuthStore } from '../../store/auth.store';
 import { UserRole, AppTheme } from '@travel-os/shared-types';
@@ -21,6 +21,7 @@ function getNavItems(role: UserRole) {
     { path: '/travel/requests', label: 'My Requests',   icon: MapPin,          roles: ['ALL'] },
     { path: '/approvals',       label: 'Approvals',     icon: CheckSquare,     roles: [UserRole.HOD, UserRole.TRAVEL_TEAM, UserRole.ADMIN, UserRole.OWNER] },
     { path: '/bookings',        label: 'Bookings',      icon: Package,         roles: [UserRole.TRAVEL_TEAM, UserRole.OWNER, UserRole.ADMIN] },
+    { path: '/reimbursements',  label: 'Reimbursements', icon: Receipt,        roles: ['ALL'] },
     { path: '/vendors',         label: 'Vendors',       icon: Building2,       roles: [UserRole.TRAVEL_TEAM, UserRole.OWNER, UserRole.ADMIN] },
     { path: '/invoices',        label: 'Invoices',      icon: Receipt,         roles: [UserRole.ADMIN, UserRole.OWNER] },
     { path: '/budget',          label: 'Budget',        icon: Wallet,          roles: ['ALL'] },
@@ -28,6 +29,7 @@ function getNavItems(role: UserRole) {
     { path: '/analytics',       label: 'Analytics',     icon: BarChart3,       roles: [UserRole.ADMIN, UserRole.OWNER, UserRole.TRAVEL_TEAM] },
     { path: '/admin/members',   label: 'Members',       icon: Users,           roles: [UserRole.ADMIN, UserRole.OWNER] },
     { path: '/admin/policies',  label: 'Manage Policy', icon: BookOpen,        roles: [UserRole.ADMIN, UserRole.OWNER] },
+    { path: '/admin/reimbursement-categories', label: 'Reimburse Categories', icon: Tag, roles: [UserRole.ADMIN, UserRole.OWNER] },
     { path: '/users',           label: 'Users',         icon: Users,           roles: [UserRole.OWNER] },
     { path: '/settings',        label: 'Settings',      icon: Settings,        roles: [UserRole.OWNER] },
   ];
