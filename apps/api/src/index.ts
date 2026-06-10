@@ -29,6 +29,8 @@ import storageRoutes from './routes/storage.routes';
 import bookingsRoutes from './routes/bookings.routes';
 import policiesRoutes from './routes/policies.routes';
 import reimbursementsRoutes from './routes/reimbursements.routes';
+import feedbackRoutes from './routes/feedback.routes';
+import complaintsRoutes from './routes/complaints.routes';
 
 const app = express();
 const PORT = process.env.PORT || 4000;
@@ -119,6 +121,8 @@ app.use('/api/v1/storage',         storageRoutes);
 app.use('/api/v1/bookings',        bookingsRoutes);
 app.use('/api/v1/policies',        policiesRoutes);
 app.use('/api/v1/reimbursements',  reimbursementsRoutes);
+app.use('/api/v1/feedback',        feedbackRoutes);
+app.use('/api/v1/complaints',      complaintsRoutes);
 
 // ─── Persistent uploads (Railway volume → STORAGE_LOCAL_DIR) ──
 app.use('/uploads', express.static(localUploadDir));

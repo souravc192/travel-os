@@ -5,6 +5,7 @@ import {
   LayoutDashboard, Plane, CheckSquare, Building2, Receipt,
   BarChart3, Users, Settings, Bell, Search, LogOut, ChevronRight,
   Wallet, MapPin, Package, Menu, X, Sparkles, Moon, Sun, BookOpen, Tag,
+  MessageSquareWarning,
 } from 'lucide-react';
 import { useAuthStore } from '../../store/auth.store';
 import { UserRole, AppTheme } from '@travel-os/shared-types';
@@ -22,6 +23,7 @@ function getNavItems(role: UserRole) {
     { path: '/approvals',       label: 'Approvals',     icon: CheckSquare,     roles: [UserRole.HOD, UserRole.TRAVEL_TEAM, UserRole.ADMIN, UserRole.OWNER] },
     { path: '/bookings',        label: 'Bookings',      icon: Package,         roles: [UserRole.TRAVEL_TEAM, UserRole.OWNER, UserRole.ADMIN] },
     { path: '/reimbursements',  label: 'Reimbursements', icon: Receipt,        roles: ['ALL'] },
+    { path: '/complaints',      label: 'Complaints',    icon: MessageSquareWarning, roles: ['ALL'] },
     { path: '/vendors',         label: 'Vendors',       icon: Building2,       roles: [UserRole.TRAVEL_TEAM, UserRole.OWNER, UserRole.ADMIN] },
     { path: '/invoices',        label: 'Invoices',      icon: Receipt,         roles: [UserRole.ADMIN, UserRole.OWNER] },
     { path: '/budget',          label: 'Budget',        icon: Wallet,          roles: ['ALL'] },

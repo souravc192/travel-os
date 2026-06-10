@@ -3,12 +3,13 @@ import { useNavigate, useParams } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import {
   ArrowLeft, Plane, Hotel, User, CheckCircle2, XCircle, Clock,
-  Sparkles, Calendar, MapPin, Building2, AlertTriangle,
+  Sparkles, Calendar, MapPin, Building2, AlertTriangle, Flag, BadgeCheck,
 } from 'lucide-react';
 import { travelRequestApi } from '../../lib/api';
 import { useAuthStore } from '../../store/auth.store';
 import { UserRole } from '@travel-os/shared-types';
 import BookingsPanel from './components/BookingsPanel';
+import FeedbackSection from './components/FeedbackSection';
 
 interface Approval {
   id: string; level: number;
@@ -75,6 +76,7 @@ const STATUS_META: Record<string, { label: string; color: string; icon: React.El
   APPROVED:      { label: 'Approved',      color: 'var(--status-success)', icon: CheckCircle2 },
   REJECTED:      { label: 'Rejected',      color: 'var(--status-danger)',  icon: XCircle },
   CANCELLED:     { label: 'Cancelled',     color: 'var(--content-muted)',  icon: XCircle },
+  COMPLETED:     { label: 'Completed',     color: 'var(--status-info)',    icon: BadgeCheck },
 };
 
 function fmtDate(d: string | null) {
@@ -175,6 +177,21 @@ export default function TravelRequestDetailPage() {
     }
   }
 
+  async function markCompleted() {
+    if (!data) return;
+    if (!window.confirm('Mark this trip as completed? This unlocks the traveler feedback window.')) return;
+    setActing(true);
+    try {
+      await travelRequestApi.complete(data.id);
+      await load();
+    } catch (err: unknown) {
+      const e = err as { response?: { data?: { error?: { message?: string } } } };
+      alert(e.response?.data?.error?.message ?? 'Could not mark completed.');
+    } finally {
+      setActing(false);
+    }
+  }
+
   if (loading) {
     return <div className="p-6 space-y-4 max-w-3xl mx-auto">
       <div className="skeleton h-10 w-full rounded-xl" />
@@ -211,6 +228,14 @@ export default function TravelRequestDetailPage() {
     user.id === data.submitted_by_user_id ||
     user.role === UserRole.OWNER || user.role === UserRole.ADMIN
   ) && ['PENDING_L1', 'PENDING_L2', 'PENDING_L3', 'APPROVED', 'AUTO_APPROVED'].includes(data.status);
+
+  const isManager = user && (
+    user.role === UserRole.TRAVEL_TEAM || user.role === UserRole.ADMIN || user.role === UserRole.OWNER
+  );
+  // F1(b): Travel Team (or Admin/Owner) marks an approved trip completed.
+  const canComplete = isManager && ['APPROVED', 'AUTO_APPROVED'].includes(data.status);
+  // Anyone involved can raise a complaint once the trip is active/done.
+  const canRaiseComplaint = ['APPROVED', 'AUTO_APPROVED', 'COMPLETED'].includes(data.status);
 
   return (
     <div className="p-4 lg:p-6 space-y-5 max-w-3xl mx-auto pb-32">
@@ -451,7 +476,7 @@ export default function TravelRequestDetailPage() {
       ))}
 
       {/* ── Bookings panel (Phase 4) ─────────────────────────── */}
-      {['APPROVED', 'AUTO_APPROVED'].includes(data.status) && (
+      {['APPROVED', 'AUTO_APPROVED', 'COMPLETED'].includes(data.status) && (
         <BookingsPanel
           requestId={data.id}
           canEdit={
@@ -474,11 +499,32 @@ export default function TravelRequestDetailPage() {
         />
       )}
 
+      {/* ── Feedback (Phase 5D) — visible once the trip is completed ─ */}
+      {data.status === 'COMPLETED' && <FeedbackSection requestId={data.id} />}
+
       {/* ── Action bar ───────────────────────────────────────── */}
-      {(canIDecide || canCancel) && (
+      {(canIDecide || canCancel || canComplete || canRaiseComplaint) && (
         <div className="sticky bottom-4 z-10">
-          <motion.div className="glass p-4 flex items-center justify-end gap-2"
+          <motion.div className="glass p-4 flex items-center justify-end gap-2 flex-wrap"
             initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }}>
+            {canRaiseComplaint && (
+              <button
+                onClick={() => navigate(`/complaints/new?travelRequestId=${data.id}`)}
+                className="px-3 py-2 rounded-xl text-xs font-semibold inline-flex items-center gap-1.5"
+                style={{
+                  background: 'rgb(var(--status-warning)/0.12)',
+                  color: 'rgb(var(--status-warning))',
+                }}>
+                <Flag className="w-3.5 h-3.5" /> Raise Complaint
+              </button>
+            )}
+            {canComplete && (
+              <button onClick={markCompleted} disabled={acting}
+                className="px-3 py-2 rounded-xl text-xs font-semibold text-white inline-flex items-center gap-1.5 disabled:opacity-60"
+                style={{ background: 'rgb(var(--status-info))' }}>
+                <BadgeCheck className="w-3.5 h-3.5" /> Mark Completed
+              </button>
+            )}
             {canCancel && (
               <button onClick={cancel} disabled={acting}
                 className="px-3 py-2 rounded-xl text-xs font-semibold disabled:opacity-60"

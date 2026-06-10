@@ -147,8 +147,29 @@ export const travelRequestApi = {
   approve: (id: string, data: { note?: string }) => api.post(`/travel-requests/${id}/approve`, data),
   reject:  (id: string, data: { note: string }) => api.post(`/travel-requests/${id}/reject`, data),
   cancel:  (id: string, data: { reason: string }) => api.post(`/travel-requests/${id}/cancel`, data),
+  complete: (id: string) => api.post(`/travel-requests/${id}/complete`),
   pendingApprovals: (params?: Record<string, unknown>) =>
     api.get('/travel-requests/pending-approvals', { params }),
+};
+
+export const feedbackApi = {
+  byRequest: (requestId: string) => api.get(`/feedback/by-request/${requestId}`),
+  create:    (data: unknown) => api.post('/feedback', data),
+  list:      () => api.get('/feedback'),
+};
+
+export const complaintApi = {
+  list:            (params?: Record<string, unknown>) => api.get('/complaints', { params }),
+  get:             (id: string) => api.get(`/complaints/${id}`),
+  create:          (data: unknown) => api.post('/complaints', data),
+  assign:          (id: string, data: { resolutionOwnerUserId: string; note?: string }) =>
+    api.post(`/complaints/${id}/assign`, data),
+  updateStatus:    (id: string, data: { status: string }) => api.post(`/complaints/${id}/status`, data),
+  resolve:         (id: string, data: { note: string }) => api.post(`/complaints/${id}/resolve`, data),
+  close:           (id: string, data: { note?: string }) => api.post(`/complaints/${id}/close`, data),
+  addComment:      (id: string, data: { body: string }) => api.post(`/complaints/${id}/comments`, data),
+  assignableUsers: () => api.get('/complaints/assignable-users'),
+  vendorAnalytics: () => api.get('/complaints/analytics/vendors'),
 };
 
 export const bookingApi = {

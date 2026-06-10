@@ -66,6 +66,7 @@ export enum TravelRequestStatus {
   APPROVED      = 'APPROVED',
   REJECTED      = 'REJECTED',
   CANCELLED     = 'CANCELLED',
+  COMPLETED     = 'COMPLETED',   // Phase 5D — Travel Team marks a trip done
 }
 
 export const REASON_OF_TRAVEL_OPTIONS = [
@@ -169,6 +170,76 @@ export interface ReimbursementItemInput {
   description:    string;
   claimedAmount:  number;
   notes:          string | null;
+}
+
+// ─── Phase 5D — Feedback & Complaint ─────────────────────────
+export enum ComplaintPriority {
+  LOW      = 'LOW',
+  MEDIUM   = 'MEDIUM',
+  HIGH     = 'HIGH',
+  CRITICAL = 'CRITICAL',
+}
+
+export enum ComplaintStatus {
+  OPEN        = 'OPEN',
+  ASSIGNED    = 'ASSIGNED',
+  IN_PROGRESS = 'IN_PROGRESS',
+  RESOLVED    = 'RESOLVED',
+  CLOSED      = 'CLOSED',
+}
+
+export enum ComplaintUpdateKind {
+  COMMENT       = 'COMMENT',
+  STATUS_CHANGE = 'STATUS_CHANGE',
+  ASSIGNMENT    = 'ASSIGNMENT',
+}
+
+// SLA windows per priority, in hours (F3 defaults — admin-configurable later)
+export const COMPLAINT_SLA_HOURS: Record<ComplaintPriority, number> = {
+  [ComplaintPriority.CRITICAL]: 4,
+  [ComplaintPriority.HIGH]:     24,
+  [ComplaintPriority.MEDIUM]:   72,
+  [ComplaintPriority.LOW]:      168,  // 7 days
+};
+
+// Complaint categories — F4: edit this list to add/remove options in one shot.
+export const COMPLAINT_CATEGORY_OPTIONS = [
+  'Flight Booking',
+  'Train Booking',
+  'Cab / Ground Transport',
+  'Hotel / Accommodation',
+  'Conference / Venue',
+  'Vendor Service Quality',
+  'Billing / Invoice Issue',
+  'Refund / Cancellation',
+  'Booking Delay',
+  'Travel Desk Support',
+  'Policy / Compliance',
+  'Others',
+] as const;
+
+export type ComplaintCategory = (typeof COMPLAINT_CATEGORY_OPTIONS)[number];
+
+export interface FeedbackInput {
+  overallRating:        number;          // 1–5 (required)
+  bookingRating:        number | null;
+  accommodationRating:  number | null;
+  transportRating:      number | null;
+  travelDeskRating:     number | null;
+  wouldRecommend:       boolean | null;
+  liked:                string | null;
+  improvements:         string | null;
+  comments:             string | null;
+}
+
+export interface ComplaintInput {
+  travelRequestId:  string | null;
+  bookingId:        string | null;
+  vendorName:       string | null;
+  category:         string;
+  priority:         ComplaintPriority;
+  subject:          string;
+  description:      string;
 }
 
 export interface BookingRow {

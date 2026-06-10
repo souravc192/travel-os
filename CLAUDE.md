@@ -1,4 +1,77 @@
-# Travel OS — Phase 5B: Multi-segment travel (current)
+# Travel OS — Phase 5D: Feedback & Complaint (current)
+
+## Phase 5D — what shipped
+
+### 1. Schema (`008_phase5d_feedback_complaint.sql`)
+- `tr_status` enum gains **COMPLETED** (terminal, after APPROVED/AUTO_APPROVED).
+  Added via `ALTER TYPE … ADD VALUE` **outside** the BEGIN/COMMIT block.
+- `travel_requests` gains `completed_at` + `completed_by` (who marked it done).
+- New enums `complaint_priority` (LOW/MEDIUM/HIGH/CRITICAL),
+  `complaint_status` (OPEN/ASSIGNED/IN_PROGRESS/RESOLVED/CLOSED),
+  `complaint_update_kind` (COMMENT/STATUS_CHANGE/ASSIGNMENT).
+- `feedback` — one row per **COMPLETED** trip (`travel_request_id` UNIQUE):
+  overall + aspect ratings (booking/accommodation/transport/travel_desk, 1–5),
+  `would_recommend`, free-text liked/improvements/comments.
+- `complaints` — code `CMP-YYYY-NNNNN` via `next_complaint_code()`:
+  raiser snapshot, optional `travel_request_id` / `booking_id`, denormalised
+  `vendor_name` (for F4 vendor analytics even after a booking is deleted),
+  `category`, `priority`, `status`, `sla_due_at`, resolution owner +
+  assigned/resolved/closed audit columns.
+- `complaint_updates` — thread/audit log (comments + status transitions).
+
+### 2. Backend
+- `travel-requests.controller.ts::completeRequest` (+ `POST /:id/complete`,
+  TRAVEL_TEAM/ADMIN/OWNER): APPROVED|AUTO_APPROVED → COMPLETED, stamps
+  `completed_at/by`. `listRequests` now also returns `completed_at`.
+- `feedback.controller.ts` + `feedback.routes.ts` (`/api/v1/feedback`):
+  - `GET /by-request/:requestId` → feedback (if any) + `windowOpen` / `canSubmit`
+    flags (30-day window, claimant-only).
+  - `POST /` → submit (trip must be COMPLETED, claimant, within 30 days, 1 per trip).
+  - `GET /` → org-wide list + rating averages (TRAVEL_TEAM/ADMIN/OWNER).
+- `complaints.controller.ts` + `complaints.routes.ts` (`/api/v1/complaints`):
+  - `POST /` create (any user); SLA due = now + priority window
+    (CRITICAL 4h / HIGH 24h / MEDIUM 72h / LOW 7d).
+  - `GET /` role-scoped (raiser + assigned owner see theirs; managers see all),
+    `GET /:id` with updates thread.
+  - `POST /:id/assign` (managers) → set Resolution Owner, status ASSIGNED.
+  - `POST /:id/status` (owner/manager) → IN_PROGRESS, `POST /:id/resolve`,
+    `POST /:id/close` (raiser or manager), `POST /:id/comments`.
+  - `GET /assignable-users` (TT/ADMIN/OWNER picker), `GET /analytics/vendors`
+    (vendor / category / status / 12-month trend — F4).
+
+### 3. Frontend
+- `TravelRequestDetailPage`: **Mark Completed** (managers, when approved),
+  **Raise Complaint** button, and a `FeedbackSection` (star form within the
+  30-day window; read-only once submitted or after the window closes).
+- `complaints/` pages: `ComplaintsListPage` (filters + SLA badges),
+  `NewComplaintPage` (optional travel/booking link, priority→SLA hint),
+  `ComplaintDetailPage` (assign owner, start/resolve/close, comment thread,
+  activity timeline), `ComplaintAnalyticsPage` (vendor-wise bars + monthly trend).
+- Sidebar: **Complaints** (all roles); analytics reachable from the list
+  (managers). `api.ts`: `feedbackApi`, `complaintApi`, `travelRequestApi.complete`.
+
+> **F4 categories** live in `COMPLAINT_CATEGORY_OPTIONS`
+> (`packages/shared-types/src/index.ts`) — edit that array to add/remove options.
+
+---
+
+# Travel OS — Phase 5C: Reimbursement (superseded)
+
+## Phase 5C — what shipped
+- Schema `007_phase5c_reimbursement.sql`: `reimbursement_categories`
+  (admin-configurable, 9 seeded), `reimbursements` (code `RM-YYYY-NNNNN`,
+  TRAVEL_LINKED|STANDALONE, status DRAFT→SUBMITTED→APPROVED/REJECTED→PAID),
+  `reimbursement_items` (N per claim, per-item receipt + partial approval).
+  INR-only; reimbursements do **not** debit the department budget (R1=C).
+- Backend `reimbursements.controller.ts` + routes (`/api/v1/reimbursements`):
+  full CRUD on headers + items + categories, decide (per-item override),
+  mark-paid, cancel, receipt upload/download (15MB PDF/img).
+- Frontend: `ReimbursementsListPage`, `NewReimbursementPage`,
+  `ReimbursementDetailPage`, `ReimbursementCategoriesAdminPage` + router/sidebar.
+
+---
+
+# Travel OS — Phase 5B: Multi-segment travel (superseded)
 
 ## Phase 5B — what shipped
 
@@ -69,10 +142,17 @@ psql $DATABASE_URL -f apps/api/src/migrations/003b_seed.sql
 psql $DATABASE_URL -f apps/api/src/migrations/004_phase4_bookings_policy.sql
 psql $DATABASE_URL -f apps/api/src/migrations/005_phase5a_urgency_booking.sql
 psql $DATABASE_URL -f apps/api/src/migrations/006_phase5b_multi_segment.sql
+psql $DATABASE_URL -f apps/api/src/migrations/007_phase5c_reimbursement.sql
+psql $DATABASE_URL -f apps/api/src/migrations/008_phase5d_feedback_complaint.sql
 ```
 Or one-shot: `npm run migrate:all` (from `apps/api`).
 
-> **Heads-up**: `006_phase5b_multi_segment.sql` TRUNCATEs `travel_requests`
+> **Phase 5D heads-up**: `008` adds `COMPLETED` to `tr_status` via
+> `ALTER TYPE … ADD VALUE` (run outside a transaction, same pattern as 005).
+> The single-file runner handles this; if you split files manually, keep the
+> ALTER TYPE statement out of any BEGIN/COMMIT block.
+
+> **Phase 5B heads-up**: `006_phase5b_multi_segment.sql` TRUNCATEs `travel_requests`
 > before dropping the legacy flat columns. Existing approvals, bookings, and
 > budget-history rows cascade. This is per the design call M1 (dummy data).
 

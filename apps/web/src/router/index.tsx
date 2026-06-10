@@ -24,6 +24,10 @@ const ReimbursementsListPage      = lazy(() => import('../pages/reimbursement/Re
 const NewReimbursementPage        = lazy(() => import('../pages/reimbursement/NewReimbursementPage'));
 const ReimbursementDetailPage     = lazy(() => import('../pages/reimbursement/ReimbursementDetailPage'));
 const ReimbursementCategoriesPage = lazy(() => import('../pages/admin/ReimbursementCategoriesAdminPage'));
+const ComplaintsListPage      = lazy(() => import('../pages/complaints/ComplaintsListPage'));
+const NewComplaintPage        = lazy(() => import('../pages/complaints/NewComplaintPage'));
+const ComplaintDetailPage     = lazy(() => import('../pages/complaints/ComplaintDetailPage'));
+const ComplaintAnalyticsPage  = lazy(() => import('../pages/complaints/ComplaintAnalyticsPage'));
 const NotFoundPage            = lazy(() => import('../pages/NotFoundPage'));
 
 // ─── Auth Initializer (runs on every app load) ────────────────
@@ -152,12 +156,18 @@ const router = createBrowserRouter([
               { path: 'reimbursements/:id',       element: <ReimbursementDetailPage /> },
               { path: 'reimbursements/:id/edit',  element: <NewReimbursementPage /> },
 
+              // Complaints (all authenticated users can raise / view their own)
+              { path: 'complaints',         element: <ComplaintsListPage /> },
+              { path: 'complaints/new',     element: <NewComplaintPage /> },
+              { path: 'complaints/:id',     element: <ComplaintDetailPage /> },
+
               // Travel Team routes (bookings live here too)
               {
                 element: <RequireAuth allowedRoles={[UserRole.TRAVEL_TEAM, UserRole.OWNER, UserRole.ADMIN]} />,
                 children: [
                   { path: 'bookings',   element: <BookingsListPage /> },
                   { path: 'vendors',    element: <PageLoader /> },
+                  { path: 'complaints/analytics', element: <ComplaintAnalyticsPage /> },
                 ],
               },
 

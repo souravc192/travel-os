@@ -360,7 +360,7 @@ export async function listRequests(req: Request, res: Response, next: NextFuncti
               tr.request_for, tr.request_kind, tr.reservation_type, tr.needs_stay,
               tr.reason_of_travel, tr.traveler_full_name, tr.traveler_email,
               tr.earliest_travel_date,
-              tr.submitted_at, tr.decided_at, tr.created_at,
+              tr.submitted_at, tr.decided_at, tr.completed_at, tr.created_at,
               d.name AS department_name,
               -- First-segment summary (for at-a-glance list display)
               (SELECT ts.from_location FROM travel_segments ts
@@ -599,5 +599,27 @@ export async function cancelRequest(req: Request, res: Response, next: NextFunct
       [`\n[CANCELLED: ${reason}]`, out.rows[0].id]
     );
     res.json({ success: true, data: out.rows[0], message: 'Request cancelled.' });
+  } catch (err) { next(err); }
+}
+
+// ─── POST /travel-requests/:id/complete ───────────────────────
+// Phase 5D / F1(b): Travel Team (or Admin/Owner) manually marks an
+// approved trip COMPLETED. This unlocks the feedback window.
+export async function completeRequest(req: Request, res: Response, next: NextFunction): Promise<void> {
+  try {
+    const userId = req.user!.sub;
+    const out = await db.query(
+      `UPDATE travel_requests
+          SET status = 'COMPLETED', completed_at = NOW(), completed_by = $2
+        WHERE id = $1
+          AND status IN ('APPROVED', 'AUTO_APPROVED')
+        RETURNING *`,
+      [req.params.id, userId]
+    );
+    if (!out.rows[0]) {
+      return bad(res, 'CANNOT_COMPLETE',
+        'Only an approved / auto-approved request can be marked completed.', 409);
+    }
+    res.json({ success: true, data: out.rows[0], message: 'Trip marked as completed.' });
   } catch (err) { next(err); }
 }

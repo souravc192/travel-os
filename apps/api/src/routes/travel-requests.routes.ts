@@ -18,5 +18,8 @@ router.post('/:id/reject',      authenticate,
   authorize(UserRole.HOD, UserRole.TRAVEL_TEAM, UserRole.ADMIN, UserRole.OWNER),
   ctrl.rejectRequest);
 router.post('/:id/cancel',      authenticate, ctrl.cancelRequest);
+router.post('/:id/complete',    authenticate,
+  authorize(UserRole.TRAVEL_TEAM, UserRole.ADMIN, UserRole.OWNER),
+  ctrl.completeRequest);
 
 export default router;
