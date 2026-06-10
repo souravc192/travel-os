@@ -15,7 +15,8 @@
     "migrate:phase5a": "node scripts/run-migration.js src/migrations/005_phase5a_urgency_booking.sql",
     "migrate:phase5b": "node scripts/run-migration.js src/migrations/006_phase5b_multi_segment.sql",
     "migrate:phase5c": "node scripts/run-migration.js src/migrations/007_phase5c_reimbursement.sql",
-    "migrate:all": "npm run migrate && npm run seed && npm run migrate:phase2 && npm run migrate:phase3 && npm run seed:phase3 && npm run migrate:phase4 && npm run migrate:phase5a && npm run migrate:phase5b && npm run migrate:phase5c",
+    "migrate:phase5d": "node scripts/run-migration.js src/migrations/008_phase5d_feedback_complaint.sql",
+    "migrate:all": "node scripts/run-all-migrations.js",
     "type-check": "tsc --noEmit"
   },
   "dependencies": {

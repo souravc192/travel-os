@@ -1,33 +1,18 @@
 /**
- * Run a SQL migration file using DATABASE_URL from apps/api/.env
- * Works on Windows without psql installed.
- * Skips migrations already recorded in schema_migrations.
+ * Run all migrations in order, skipping any already recorded in schema_migrations.
  *
- * Usage: node scripts/run-migration.js src/migrations/004_phase4_bookings_policy.sql
+ * Usage: node scripts/run-all-migrations.js
  */
 require('dotenv').config();
 const fs = require('fs');
 const path = require('path');
 const { Client } = require('pg');
 const {
+  MIGRATIONS,
   bootstrapIfNeeded,
   isApplied,
   recordApplied,
 } = require('./migration-tracker');
-
-const fileArg = process.argv[2];
-if (!fileArg) {
-  console.error('Usage: node scripts/run-migration.js <path-to.sql>');
-  process.exit(1);
-}
-
-const sqlPath = path.resolve(process.cwd(), fileArg);
-if (!fs.existsSync(sqlPath)) {
-  console.error(`Migration file not found: ${sqlPath}`);
-  process.exit(1);
-}
-
-const filename = path.basename(sqlPath);
 
 const dbUrl = process.env.DATABASE_URL;
 if (!dbUrl) {
@@ -42,7 +27,6 @@ const needsSsl =
   /(neon\.tech|supabase\.co|railway\.app|render\.com|aws|azure)/i.test(dbUrl);
 
 async function main() {
-  const sql = fs.readFileSync(sqlPath, 'utf8');
   const client = new Client({
     connectionString: dbUrl,
     ssl: needsSsl ? { rejectUnauthorized: false } : false,
@@ -52,15 +36,31 @@ async function main() {
   try {
     await bootstrapIfNeeded(client);
 
-    if (await isApplied(client, filename)) {
-      console.log(`Skipping ${filename} (already applied)`);
-      return;
+    let ran = 0;
+    let skipped = 0;
+
+    for (const { file } of MIGRATIONS) {
+      const sqlPath = path.resolve(process.cwd(), 'src/migrations', file);
+      if (!fs.existsSync(sqlPath)) {
+        console.warn(`Skipping ${file} — file not found`);
+        continue;
+      }
+
+      if (await isApplied(client, file)) {
+        console.log(`Skipping ${file} (already applied)`);
+        skipped++;
+        continue;
+      }
+
+      console.log(`Running migration: ${file}`);
+      const sql = fs.readFileSync(sqlPath, 'utf8');
+      await client.query(sql);
+      await recordApplied(client, file);
+      console.log(`Completed: ${file}`);
+      ran++;
     }
 
-    console.log(`Running migration: ${filename}`);
-    await client.query(sql);
-    await recordApplied(client, filename);
-    console.log('Migration completed successfully.');
+    console.log(`\nDone. ${ran} applied, ${skipped} skipped.`);
   } finally {
     await client.end();
   }
