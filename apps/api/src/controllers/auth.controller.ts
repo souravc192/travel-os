@@ -15,6 +15,24 @@ import {
 import { logger } from '../config/logger';
 import { AppTheme } from '@travel-os/shared-types';
 
+// ─── Refresh-token cookie options ─────────────────────────────
+// When the web app and API live on the SAME origin (single-server / local
+// dev), `sameSite: 'lax'` is correct. When they're on DIFFERENT domains
+// (e.g. web on Vercel, API on Railway), the browser will only send the
+// cookie cross-site if it's `sameSite: 'none'` AND `secure: true`.
+// Set CROSS_SITE_COOKIE=true on the API host for the split deployment.
+const isProd      = process.env.NODE_ENV === 'production';
+const crossSite   = process.env.CROSS_SITE_COOKIE === 'true';
+const COOKIE_PATH = '/api/v1/auth';
+
+const refreshCookieOptions = {
+  httpOnly: true,
+  secure:   isProd || crossSite,          // 'none' requires Secure
+  sameSite: (crossSite ? 'none' : 'lax') as 'none' | 'lax',
+  maxAge:   TTL.REFRESH_TOKEN * 1000,
+  path:     COOKIE_PATH,
+};
+
 // ─── POST /auth/login ─────────────────────────────────────────
 export async function login(req: Request, res: Response, next: NextFunction): Promise<void> {
   try {
@@ -68,13 +86,7 @@ export async function login(req: Request, res: Response, next: NextFunction): Pr
     await db.query('UPDATE users SET last_login_at = NOW() WHERE id = $1', [user.id]);
 
     // 5. Set refresh token as httpOnly cookie
-    res.cookie('refreshToken', refreshToken, {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
-      sameSite: 'lax',
-      maxAge: TTL.REFRESH_TOKEN * 1000,
-      path: '/api/v1/auth',
-    });
+    res.cookie('refreshToken', refreshToken, refreshCookieOptions);
 
     logger.info(`User logged in: ${email} (${user.role})`);
 
@@ -152,13 +164,7 @@ export async function refreshToken(req: Request, res: Response, next: NextFuncti
       theme: user.theme as AppTheme,
     });
 
-    res.cookie('refreshToken', newRefreshToken, {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
-      sameSite: 'lax',
-      maxAge: TTL.REFRESH_TOKEN * 1000,
-      path: '/api/v1/auth',
-    });
+    res.cookie('refreshToken', newRefreshToken, refreshCookieOptions);
 
     res.json({
       success: true,
@@ -194,7 +200,11 @@ export async function logout(req: Request, res: Response, next: NextFunction): P
     }
 
     // Clear cookie
-    res.clearCookie('refreshToken', { path: '/api/v1/auth' });
+    res.clearCookie('refreshToken', {
+      path:     COOKIE_PATH,
+      secure:   refreshCookieOptions.secure,
+      sameSite: refreshCookieOptions.sameSite,
+    });
 
     logger.info(`User logged out: ${req.user?.email}`);
     res.json({ success: true, message: 'Logged out successfully.' });
@@ -213,7 +223,11 @@ export async function logoutAll(req: Request, res: Response, next: NextFunction)
 
     await revokeAllUserTokens(req.user.sub);
     if (req.user.jti) await blacklistAccessToken(req.user.jti);
-    res.clearCookie('refreshToken', { path: '/api/v1/auth' });
+    res.clearCookie('refreshToken', {
+      path:     COOKIE_PATH,
+      secure:   refreshCookieOptions.secure,
+      sameSite: refreshCookieOptions.sameSite,
+    });
 
     logger.info(`All sessions revoked for user: ${req.user.email}`);
     res.json({ success: true, message: 'All sessions logged out.' });
