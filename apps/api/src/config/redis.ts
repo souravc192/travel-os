@@ -33,9 +33,19 @@ export async function testRedisConnection(): Promise<void> {
     logger.warn('⚠️  Redis is DISABLED (REDIS_ENABLED=false). Cache/session features will be skipped.');
     return;
   }
-  await redis.connect();
-  await redis.ping();
-  logger.info('Redis ping: PONG ✓');
+  // Redis is optional. If it can't be reached at boot, DON'T crash the server
+  // (that would fail the platform healthcheck). Instead disable it so every
+  // cache/session call degrades to the no-Redis path (all helpers guard on
+  // `if (redis)`), and the API still serves traffic.
+  try {
+    await redis.connect();
+    await redis.ping();
+    logger.info('Redis ping: PONG ✓');
+  } catch (err) {
+    logger.warn('⚠️  Redis unavailable at boot — continuing without cache/session store.', err);
+    try { redis.disconnect(); } catch { /* ignore */ }
+    redis = null;
+  }
 }
 
 // ─── TTL Constants ────────────────────────────────────────────

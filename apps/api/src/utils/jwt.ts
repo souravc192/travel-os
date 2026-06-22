@@ -23,11 +23,15 @@ export interface RefreshTokenPayload {
   exp: number;
 }
 
-const ACCESS_SECRET  = process.env.JWT_ACCESS_SECRET!;
-const REFRESH_SECRET = process.env.JWT_REFRESH_SECRET!;
+// Accept dedicated per-token secrets, or fall back to a single JWT_SECRET.
+// (A single secret is fine: access/refresh tokens differ by payload + expiry.)
+const ACCESS_SECRET  = process.env.JWT_ACCESS_SECRET  || process.env.JWT_SECRET || '';
+const REFRESH_SECRET = process.env.JWT_REFRESH_SECRET || process.env.JWT_SECRET || '';
 
 if (!ACCESS_SECRET || !REFRESH_SECRET) {
-  throw new Error('JWT secrets are not configured. Set JWT_ACCESS_SECRET and JWT_REFRESH_SECRET.');
+  throw new Error(
+    'JWT secret not configured. Set JWT_SECRET (or both JWT_ACCESS_SECRET and JWT_REFRESH_SECRET).'
+  );
 }
 
 // ─── Sign Access Token ────────────────────────────────────────
